@@ -1,0 +1,7 @@
+{
+    "author": ["Ribose"],
+    "description": "Command to request detailed content of Wikia pages.",
+    "short": "Command to request Wikia pages.",
+    "tags": ["wikia", "wiki", "utilities"]
+}
+
