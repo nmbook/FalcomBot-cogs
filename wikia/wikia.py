@@ -31,9 +31,8 @@ class Wikia:
         self.config.register_guild(**default_guild)
         self.http_client = aiohttp.ClientSession()
 
-    #async def wikiset(self, setting, *, value):
-    #    """Set Wikia viewing module settings."""
-    #    pass
+    def __unload(self):
+        self.http_client.close()
 
     @commands.command(aliases=["wiki"])
     async def wikia(self, ctx, *, search_terms : str):
