@@ -5,7 +5,7 @@ import discord
 from discord.ext import commands
 from redbot.core import Config
 from redbot.core import checks
-from redbot.core.utils.chat_formatting import escape
+from redbot.core.utils.chat_formatting import escape, info, error
 
 class RoleRequests:
     """Adds or removes a role on users by request."""
@@ -26,34 +26,33 @@ class RoleRequests:
         self.config.register_guild(**default_guild)
         self.config.register_channel(**default_channel)
     
-    @commands.group(no_pm=True, aliases=['iam', 'req'])
+    @commands.group(aliases=['iam', 'req'])
+    @commands.guild_only()
     async def request(self, ctx):#, *, raw_text):
         """Requests access to a role."""
         if ctx.invoked_subcommand is None:
-            #if len(raw_text) > 0:
-            #    await self.add(ctx, raw_text)
-            #else:
-                await ctx.send_help()
+            await ctx.send_help()
     
-    @request.command(no_pm=True)
-    #@checks.mod_or_permissions(add_reactions=True)
+    @request.command()
+    @commands.guild_only()
     async def list(self, ctx):
         """Lists the roles that can be requested."""
-        msg = await self._get_role_list_message(ctx, ctx.message.channel)
+        msg = await self._get_role_list_message(ctx, ctx.channel)
 
         await ctx.send(msg)
     
-    @request.command(no_pm=True)
+    @request.command()
+    @commands.guild_only()
     @checks.mod_or_permissions(administrator=True)
     async def postlist(self, ctx, channel : discord.TextChannel):
         """Lists the roles that can be requested and posts them permanently to the specified channel."""
         msg = await self._get_role_list_message(ctx)
 
         if channel is None:
-            channel = ctx.message.channel
+            channel = ctx.channel
 
         if channel.guild.id != ctx.guild.id:
-            await ctx.send("Error: That channel is not on this server.")
+            await ctx.send(error("That channel is not on this server."))
             return
 
         post_id = await self.config.channel(channel).role_info_post()
@@ -81,12 +80,10 @@ class RoleRequests:
         else:
             await ctx.send('Message posted to channel. Update it later with `{}request postlist #{}`'.format(ctx.prefix[0], channel))
 
-    @request.command(no_pm=True)
-    #@checks.mod_or_permissions(add_reactions=True)
+    @request.command()
+    @commands.guild_only()
     async def add(self, ctx, *, role_name):
         """Gives you a requestable role."""
-        author = ctx.message.author
-
         # requestable list
         role_subset = await self.config.guild(ctx.guild).roles()
         max_requestable = await self.config.guild(ctx.guild).max_requestable()
@@ -96,37 +93,35 @@ class RoleRequests:
         if role_to_add is None:
             return
 
-        if role_to_add in author.roles:
-            await ctx.send("Error: You already have the role `{}`.".format(role_to_add))
+        if role_to_add in ctx.author.roles:
+            await ctx.send(error("You already have the role `{}`.".format(role_to_add)))
             return
 
         if not role_to_add.id in role_subset:
-            await ctx.send("Error: You cannot request `{}`.".format(role_to_add))
+            await ctx.send(error("You cannot request `{}`.".format(role_to_add)))
             return
 
         count = 0
-        for role in author.roles:
+        for role in ctx.author.roles:
             if role.id in role_subset:
                 count += 1
                 if count >= max_requestable:
                     cpl = ''
                     if count != 1:
                         cpl = 's'
-                    await ctx.send("Error: You already have {} role{} that can be requested (max: {}). You may ask a moderator or you may remove a role with with `{}request rem NAME`.".format(count, cpl, max_requestable, ctx.prefix[0]))
+                    await ctx.send(error("You already have {} role{} that can be requested (max: {}). You may ask a moderator or you may remove a role with with `{}request rem NAME`.".format(count, cpl, max_requestable, ctx.prefix[0])))
                     return
 
-        await author.add_roles(role_to_add)
+        await ctx.author.add_roles(role_to_add)
         await ctx.send('Added {} to your roles.'.format(self._get_role_styled(role_to_add, show_stats=True)))
 
-    @request.command(no_pm=True, aliases=['remove'])
-    #@checks.mod_or_permissions(add_reactions=True)
+    @request.command(aliases=['remove'])
+    @commands.guild_only()
     async def rem(self, ctx, *, role_name):
         """Takes a requestable role."""
-        author = ctx.message.author
-
         # requestable list
         role_subset = await self.config.guild(ctx.guild).roles()
-        role_ids = [x.id for x in author.roles]
+        role_ids = [x.id for x in ctx.author.roles]
         role_subset = [x for x in role_subset if x in role_ids]
 
         # find matches
@@ -134,36 +129,36 @@ class RoleRequests:
         if role_to_add is None:
             return
 
-        if not role_to_add in author.roles:
-            await ctx.send("Error: You do not have the role `{}`.".format(role_to_add))
+        if not role_to_add in ctx.author.roles:
+            await ctx.send(error("You do not have the role `{}`.".format(role_to_add)))
             return
 
         if not role_to_add.id in role_subset:
-            await ctx.send("Error: You cannot remove `{}`.".format(role_to_add))
+            await ctx.send(error("You cannot remove `{}`.".format(role_to_add)))
             return
 
-        await author.remove_roles(role_to_add)
+        await ctx.author.remove_roles(role_to_add)
         await ctx.send('Removed {} from your roles.'.format(self._get_role_styled(role_to_add, show_stats=True)))
 
-    @request.command(no_pm=True, aliases=['clr'])
+    @request.command(aliases=['clr'])
+    @commands.guild_only()
     async def clear(self, ctx):
         """Clears all requestable roles."""
-        author = ctx.message.author
-
         # requestable list
         role_subset = await self.config.guild(ctx.guild).roles()
-        role_objs = [x for x in author.roles if x.id in role_subset]
+        role_objs = [x for x in ctx.author.roles if x.id in role_subset]
         role_count = len(role_objs)
         if role_count > 0:
-            await author.remove_roles(*role_objs)
+            await ctx.author.remove_roles(*role_objs)
             if role_count > 1:
                 await ctx.send('Removed {} of your roles.'.format(role_count))
             else:
                 await ctx.send('Removed {} from your roles.'.format(self._get_role_styled(role_objs[0], show_stats=True)))
         else:
-            await ctx.send("Error: You do not have any requestable roles to remove.")
+            await ctx.send(error("You do not have any requestable roles to remove."))
 
-    @request.command(no_pm=True)
+    @request.command()
+    @commands.guild_only()
     @checks.mod_or_permissions(administrator=True)
     async def addrole(self, ctx, *, role_name):
         """Adds a role to be requestable."""
@@ -174,14 +169,15 @@ class RoleRequests:
 
         async with self.config.guild(ctx.guild).roles() as role_subset:
             if ctx.guild.id in role_subset:
-                await ctx.send("Error: Role {} can already be requested.".format(self._get_role_styled(role_to_add, show_stats=True)))
+                await ctx.send(error("Role {} can already be requested.".format(self._get_role_styled(role_to_add, show_stats=True))))
                 return
 
             role_subset.append(role_to_add.id)
 
-            await ctx.send("Added {} to requestable roles list.".format(self._get_role_styled(role_to_add, show_stats=True)))
+            await ctx.send(info("Added {} to requestable roles list.".format(self._get_role_styled(role_to_add, show_stats=True))))
 
-    @request.command(no_pm=True, aliases=['removerole'])
+    @request.command(aliases=['removerole'])
+    @commands.guild_only()
     @checks.mod_or_permissions(administrator=True)
     async def remrole(self, ctx, *, role_name):
         """Removes a role from being requestable."""
@@ -192,39 +188,15 @@ class RoleRequests:
         
         async with self.config.guild(ctx.guild).roles() as role_subset:
             if not ctx.guild.id in role_subset:
-                await ctx.send("Error: Role {} was already not requestable.".format(self._get_role_styled(role_to_add, show_stats=True)))
+                await ctx.send(error("Role {} was already not requestable.".format(self._get_role_styled(role_to_add, show_stats=True))))
                 return
 
             role_subset.remove(role_to_add.id)
 
-            await ctx.send("Removed {} from requestable roles list.".format(self._get_role_styled(role_to_add, show_stats=True)))
+            await ctx.send(info("Removed {} from requestable roles list.".format(self._get_role_styled(role_to_add, show_stats=True))))
 
-    @commands.group(no_pm=True)
-    @checks.mod_or_permissions(administrator=True)
-    async def reqset(self, ctx):
-        """Adjust settings."""
-        if ctx.invoked_subcommand is None:
-            await ctx.send_help()
-
-    @reqset.command(no_pm=True)
-    @checks.mod_or_permissions(administrator=True)
-    async def request_channel(self, ctx, channel : discord.TextChannel = None):
-        """Where `[p]request list` commands say to use the `[p]request` command."""
-        if channel is None:
-            channel_id = 0
-        elif channel.guild != ctx.guild:
-            await ctx.send("Error: Channel not found on this server.")
-            return
-        else:
-            channel_id = channel.id
-
-        await self.config.guild(ctx.guild).request_channel.set(channel_id)
-        if channel_id != 0:
-            await ctx.send("Set \"request channel\" to {}".format(channel.mention))
-        else:
-            await ctx.send("Cleared \"request channel\".")
-
-    @request.command(no_pm=True, aliases=['massapplyrole', 'massapply'])
+    @request.command(aliases=['massapplyrole', 'massapply'])
+    @commands.guild_only()
     @checks.mod_or_permissions(administrator=True)
     async def massadd(self, ctx, limit : int = 1000, channel : discord.TextChannel = None, *, role_name):
         """Adds roles to all users who have participated in a channel within the last X messages."""
@@ -237,16 +209,16 @@ class RoleRequests:
             return
 
         if channel is None:
-            channel = ctx.message.channel
+            channel = ctx.channel
 
         if channel is None:
-            await ctx.send("Error: Channel not found.")
+            await ctx.send(error("Channel not found."))
             return
         if channel.guild != ctx.guild:
-            await ctx.send("Error: Channel not found on this server.")
+            await ctx.send(error("Channel not found on this server."))
             return
 
-        async with ctx.message.channel.typing():
+        async with ctx.channel.typing():
             accounts = []
             n = 0
             async for message in channel.history(limit=limit):
@@ -259,14 +231,14 @@ class RoleRequests:
                 n += 1
 
             if len(accounts) == 0:
-                await ctx.send("Error: No users have participated in the last {} messages in {}.".format(n, channel.mention))
+                await ctx.send(error("No users have participated in the last {} messages in {}.".format(n, channel.mention)))
             elif len(accounts) == 1:
                 await accounts[0].add_roles(role_to_add)
-                await ctx.send("Added {} to {}'s roles (only participant in the last {} messages in {}).".format(self._get_role_styled(role_to_add, show_stats=True), accounts[0], n, channel.mention))
+                await ctx.send(info("Added {} to {}'s roles (only participant in the last {} messages in {}).".format(self._get_role_styled(role_to_add, show_stats=True), accounts[0], n, channel.mention)))
             else:
                 for account in accounts:
                     await account.add_roles(role_to_add)
-                await ctx.send("Added {} to {} users' roles (participants in the last {} messages in {}).".format(self._get_role_styled(role_to_add, show_stats=True), len(accounts), n, channel.mention))
+                await ctx.send(info("Added {} to {} users' roles (participants in the last {} messages in {}).".format(self._get_role_styled(role_to_add, show_stats=True), len(accounts), n, channel.mention)))
 
     def _get_role_styled(self, role_obj, *, show_stats=False):
         if role_obj.mentionable:
@@ -345,15 +317,53 @@ class RoleRequests:
                     role_to_add_results.append(role_obj)
 
             if len(role_to_add_results) == 0:
-                await ctx.send("Error: Text does not match a role.".format(role_name))
+                await ctx.send(error("Text does not match a role.".format(role_name)))
                 return None
             elif len(role_to_add_results) == 1:
                 role_to_add = role_to_add_results[0]
                 found_on_guild = True
             else:
                 role_to_add_result_str = ', '.join(['`{}`'.format(x) for x in role_to_add_results])
-                await ctx.send("Error: Text matches multiple possible roles: {}".format(role_to_add_result_str))
+                await ctx.send(error("Text matches multiple possible roles: {}".format(role_to_add_result_str)))
                 return None
 
         return role_to_add
  
+
+    @commands.group()
+    @commands.guild_only()
+    @checks.mod_or_permissions(administrator=True)
+    async def reqset(self, ctx):
+        """Adjust [p]request command settings."""
+        if ctx.invoked_subcommand is None:
+            await ctx.send_help()
+
+    @reqset.command(aliases=["req_channel", "channel"])
+    @commands.guild_only()
+    @checks.mod_or_permissions(administrator=True)
+    async def request_channel(self, ctx, channel : discord.TextChannel = None):
+        """Where `[p]request list` commands say to use the `[p]request` command."""
+        if channel is None:
+            channel_id = 0
+        elif channel.guild != ctx.guild:
+            await ctx.send(error("Channel not found on this server."))
+            return
+        else:
+            channel_id = channel.id
+
+        await self.config.guild(ctx.guild).request_channel.set(channel_id)
+        if channel_id != 0:
+            await ctx.send(info("Set where to suggest using the `[p]request` commands in `[p]request list` to {}.".format(channel.mention)))
+        else:
+            await ctx.send(info("Set the `[p]request list` to not suggest a channel."))
+
+    @reqset.command(aliases=["max_req", "max"])
+    @commands.guild_only()
+    @checks.mod_or_permissions(administrator=True)
+    async def max_requestable(self, ctx, count : int):
+        """Maximum number of roles that users can request."""
+        if count < 0:
+            await ctx.send(error("Maximum must not be negative."))
+
+        await self.config.guild(ctx.guild).max_requestable.set(count)
+        await ctx.send(info("Set maximum number of requestable roles per user to {}.".format(count)))
