@@ -1,0 +1,7 @@
+{
+    "author": ["Ribose"],
+    "description": "Bridges a BotNet service connection to a Discord channel.",
+    "short": "Bridges BotNet to Discord.",
+    "tags": ["botnet", "valhallalegends", "feed", "utilities"]
+}
+
