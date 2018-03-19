@@ -1005,9 +1005,12 @@ class BotNetVL:
     def handle_discord_author(self, author):
         """Returns the Discord user's name or nick."""
         if author.nick and len(author.nick):
-            return author.nick.replace(" ", "_") + "#" + str(author.discriminator)
+            text = author.nick
         else:
-            return author.name.replace(" ", "_") + "#" + str(author.discriminator)
+            text = author.name
+        return "{name}#{discr}".format( \
+                name = text.replace("\\", "\\\\").replace("_", "\\_").replace(" ", "_"), \
+                discr = author.discriminator)
 
     def handle_discord_text(self, clean_content, prefix, length):
         """Splits long text to be passed from discord to BotNet.
