@@ -6,6 +6,7 @@ from redbot.core.utils.chat_formatting import escape, info, error
 from datetime import datetime
 import asyncio
 import concurrent.futures
+import fnmatch
 import itertools
 import math
 import socket
@@ -19,11 +20,11 @@ class BotNetVL:
     
     BotNet is a service once used by a small number of users for inter-bot communication with the Classic Battle.net botting community."""
 
-    default_global_conf = {
+    global_conf = {
             # connection settings
-            "server":           "",
+            "server":           "botnet.bnetdocs.org",
             "port":             0x5555,
-            "bot_name":         "StealthBot",
+            "bot_name":         "BNETDocs",
             "bot_pass":         "33 9c 0f 58 fe c7 2a",
             "database_name":    "",
             "database_pass":    "",
@@ -36,26 +37,18 @@ class BotNetVL:
             "hub_automirror":   False,
     }
 
-    default_channel_conf = {
-            "guild":            0,
-            "channel_cb":       0,
-            "feed_type":        "none",
-            "account_relay":    None,
-            "users_pin":        0,
-            "chat_disabled":    False,
-            "chat_roles":       [],
-            "do_users_pin":     True,
-            "do_join_part":     True,
-            "do_echo_self":     False,
+    channel_conf = {
+            "guild":            { "default": 0,      "bncsset-edit": False, "bncsset-causes-reset": False, "type": "guild-id", },
+            "channel_cb":       { "default": 0,      "bncsset-edit": False, "bncsset-causes-reset": False, "type": "channel-id", },
+            "feed_type":        { "default": "none", "bncsset-edit": False, "bncsset-causes-reset": False, "type": "one-of:none,botnet,bncs", },
+            "account_relay":    { "default": None,   "bncsset-edit": True,  "bncsset-causes-reset": True,  "type": "str", },
+            "users_pin":        { "default": 0,      "bncsset-edit": False, "bncsset-causes-reset": False, "type": "message-id", },
+            "chat_disabled":    { "default": False,  "bncsset-edit": False, "bncsset-causes-reset": False, "type": "bool", },
+            "chat_roles":       { "default": [],     "bncsset-edit": False, "bncsset-causes-reset": False, "type": "list-of:role-id", },
+            "do_users_pin":     { "default": True,   "bncsset-edit": True,  "bncsset-causes-reset": False, "type": "bool", },
+            "do_join_part":     { "default": True,   "bncsset-edit": True,  "bncsset-causes-reset": False, "type": "bool", },
+            "do_echo_self":     { "default": False,  "bncsset-edit": True,  "bncsset-causes-reset": False, "type": "bool", },
     }
-    
-    default_channel_conf_user_settable = [
-            "account_relay",
-            "chat_disabled",
-            "do_users_pin",
-            "do_join_part",
-            "do_echo_self",
-    ]
 
     emoji_map = {
             "USEast":       "<:useast:424674002943082499>",
@@ -100,9 +93,11 @@ class BotNetVL:
     def __init__(self, bot):
         self.bot = bot
 
+        #channel_conf = 
+
         self.config = Config.get_conf(self, identifier=0xff5269620001)
-        self.config.register_global(**BotNetVL.default_global_conf)
-        self.config.register_channel(**BotNetVL.default_channel_conf)
+        self.config.register_global(**BotNetVL.global_conf)
+        self.config.register_channel(**{k: v["default"] for k, v in BotNetVL.channel_conf.items()})
 
         self.state = None
         self.channel_states = {}
@@ -481,7 +476,7 @@ class BotNetVL:
                                 break
                 if can_chat:
                     if   channel_state.feed_type == "botnet":
-                        to_send = self.handle_discord_message(message)
+                        to_send = self.handle_discord_message(message, out_suffix = "")
                         await self.send_resp(to_send)
                     elif channel_state.feed_type == "bncs":
                         botnet_account = channel_state.account_relay
@@ -1002,7 +997,7 @@ class BotNetVL:
         text = text.replace("@", "\\@")
         return escape(text, mass_mentions=True)
 
-    def handle_discord_message(self, message, *, length = 496, in_prefix = "", out_prefix = "", whisper_to = 0):
+    def handle_discord_message(self, message, *, length = 496, in_prefix = "", out_prefix = "", out_suffix = "", whisper_to = 0):
         """Takes a Discord message object and parses the content to be sent to BotNet."""
         if len(in_prefix) > 0:
             if message.clean_content.startswith(in_prefix):
@@ -1028,8 +1023,9 @@ class BotNetVL:
                   (content.startswith("_") and content.endswith("_") and not content.endswith("__"))):
                     content = content[1:-1]
                     emote = True
-                text = "{out_pref}{author} {content}".format( \
+                text = "{out_pref}{author}{out_suf} {content}".format( \
                         out_pref = out_prefix, \
+                        out_suf = out_suffix, \
                         author = self.handle_discord_author(message.author), \
                         content = content)
                 to_send.append(self.send_chat(text, whisper_to = whisper_to, emote = emote))
@@ -1271,7 +1267,7 @@ class BotNetVL:
         self.resolve_map[friendly] = {"domain": hostname, "addresses": ipaddrlist}
         return friendly
 
-    def print_settings_dict(self, ctx, data):
+    def print_conf_data(self, ctx, data):
         mkl = 0
         for k, v in data.items():
             if len(k) + 4 > mkl:
@@ -1286,6 +1282,43 @@ class BotNetVL:
             s += k.ljust(mkl) + res + "\n"
         return "```\n{}```".format(s)
 
+    def escape_code_text(self, text):
+        return text.replace("`", "\\`").replace("\n", "\\n")
+
+    def parse_conf_value(self, ctx, val, typ):
+        if   typ == "str":
+            if val.startswith("\"") and val.endswith("\""):
+                return val[1:-1]
+            return val
+        if   typ == "guild-id":
+            typ = "int"
+        if   typ == "channel-id":
+            if len(ctx.message.channel_mentions) > 1:
+                return ctx.message.channel_mentions[1]
+            typ = "int"
+        if   typ == "user-id" or typ == "member-id":
+            if len(ctx.message.mentions) > 0:
+                return ctx.message.mentions[0]
+            typ = "int"
+        if   typ == "role-id" or typ == "role-id":
+            if len(ctx.message.mentions) > 0:
+                return ctx.message.mentions[0]
+            typ = "int"
+        if   typ == "int":
+            try:
+                return int(val)
+            except ValueError:
+                return 0
+        if   typ == "bool":
+            if   val.lower() in ["true", "t", "yes", "y", "on"]:
+                return True
+            elif val.lower() in ["false", "f", "no", "n", "off"]:
+                return False
+            else:
+                return None
+        
+        return str(val)
+
     @commands.command(aliases=["bnreconnect", "bnrc"])
     @checks.is_owner()
     async def botnetreconnect(self, ctx):
@@ -1295,48 +1328,6 @@ class BotNetVL:
         self.tasks = []
         coro = self.botnet_main()
         self.tasks.append(self.bot.loop.create_task(coro))
-
-    @commands.command(aliases=["bnset", "botnetget", "bnget"])
-    @checks.is_owner()
-    async def botnetset(self, ctx, key : str = None, *, val : str = None):
-        """Gets or sets settings for the BotNet connection."""
-        try:
-            if key is None or len(key) == 0:
-                data = await self.config.all()
-                await ctx.send(content="Current BotNet settings:\n" + self.print_settings_dict(ctx, data))
-            elif val is None or len(val) == 0:
-                if not key.lower() in BotNetVL.default_global_conf:
-                    await ctx.send(content="There is no BotNet setting called {}.".format(self.escape_text(key)))
-                    return
-                key = key.lower()
-                data = {key: await self.config.get_attr(key)()}
-                await ctx.send(content="Current BotNet setting:\n" + self.print_settings_dict(ctx, data))
-            else:
-                if not key.lower() in BotNetVL.default_global_conf:
-                    await ctx.send(content="There is no BotNet setting called {}.".format(self.escape_text(key)))
-                    return
-                key = key.lower()
-                if   len(ctx.message.mentions) == 1:
-                    val = ctx.message.mentions[0].id
-                elif len(ctx.message.channel_mentions) == 1:
-                    val = ctx.message.channel_mentions[0].id
-                elif len(ctx.message.role_mentions) == 1:
-                    val = ctx.message.role_mentions[0].id
-                elif val.startswith("\"") and val.endswith("\"") and len(val) >= 2:
-                    val = val[1:-2]
-                elif val.isnumeric():
-                    val = int(val)
-                elif val.lower() in ["true", "t", "yes", "y", "on"]:
-                    val = True
-                elif val.lower() in ["false", "f", "no", "n", "off"]:
-                    val = False
-                elif val.lower() in ["none", "null", "nil"]:
-                    val = None
-                await self.config.get_attr(key).set(val)
-                data = {key: val}
-                await ctx.send(content="BotNet setting has been set:\n" + self.print_settings_dict(ctx, data))
-        except Exception as ex:
-            print("BotNet EXCEPTION getting/setting global setting: {}".format(ex))
 
     @commands.command(aliases=["bnfeed"])
     @checks.is_owner()
@@ -1437,9 +1428,52 @@ class BotNetVL:
 
         await ctx.send(content=info("Created a Classic Battle.net channel feed from BotNet account {} to {}.".format(self.escape_text(account_name), channel.mention)))
 
+    @commands.command(aliases=["bnset", "botnetget", "bnget"])
+    @checks.is_owner()
+    async def botnetset(self, ctx, key : str = "", *, val : str = ""):
+        """Gets or sets settings for the BotNet connection."""
+        try:
+            if len(key) == 0:
+                is_changing = False
+                key = "*"
+                header = "Current BotNet settings:"
+            elif len(val) == 0:
+                is_changing = False
+                header = "Current BotNet settings (matching `{}`)".format(self.escape_code_text(key))
+            else:
+                is_changing = True
+                header = "BotNet setting was set:"
+
+            if not key.lower() in BotNetVL.global_conf:
+                if not "*" in key and not "?" in key and not "[" in key and not "]" in key:
+                    key = key + "*"
+                key_matches = fnmatch.filter(BotNetVL.global_conf.keys(), key)
+                if len(key_matches) == 0:
+                    await ctx.send(content="There is no BotNet setting called `{}`.".format(self.escape_code_text(key)))
+                    return
+                elif len(key_matches) > 1 and is_changing:
+                    await ctx.send(content="Multiple BotNet settings match `{}`.".format(self.escape_code_text(key)))
+                    return
+            else:
+                key_matches = [key.lower()]
+        
+            if is_changing:
+                key = key_matches[0]
+                val = self.parse_conf_value(ctx, val, "str")
+                data = {key: str(val)}
+                await self.config.get_attr(key).set(val)
+                setattr(self.state, key, val)
+            else:
+                data = {}
+                for key in key_matches:
+                    data[key] = await self.config.get_attr(key)()
+            await ctx.send(content="{}\n{}".format(header, self.print_conf_data(ctx, data)))
+        except Exception as ex:
+            print("BotNet EXCEPTION getting/setting global setting: {}".format(ex))
+
     @commands.command(aliases=["bncsget"])
     @checks.guildowner_or_permissions(Administrator=True)
-    async def bncsset(self, ctx, channel : discord.TextChannel, key : str = None, *, val : str = None):
+    async def bncsset(self, ctx, channel : discord.TextChannel, key : str = "", *, val : str = ""):
         """Gets or sets settings for the Classic Battle.net feed."""
         if channel.guild is None or ctx.guild is None or channel.guild.id != ctx.guild.id:
             await ctx.send(content=error("That channel is not known or does not have a feed. Use the !bncsfeed command to create a feed."))
@@ -1450,44 +1484,45 @@ class BotNetVL:
             return
 
         try:
-            if key is None or len(key) == 0:
-                data = await self.config.channel(channel).all()
-                await ctx.send(content="Current {} feed settings:\n{}".format(channel.mention, self.print_settings_dict(ctx, data)))
-            elif val is None or len(val) == 0:
-                if not key.lower() in BotNetVL.default_channel_conf:
-                    await ctx.send(content="There is no feed setting called {}.".format(self.escape_text(key)))
-                    return
-                key = key.lower()
-                data = {key: await self.config.channel(channel).get_attr(key)()}
-                await ctx.send(content="Current {} feed setting:\n".format(channel.mention, self.print_settings_dict(ctx, data)))
+            if len(key) == 0:
+                is_changing = False
+                key = "*"
+                header = "Current {} settings:".format(channel.mention)
+            elif len(val) == 0:
+                is_changing = False
+                header = "Current {} settings (matching `{}`)".format(channel.mention, self.escape_code_text(key))
             else:
-                if not key.lower() in BotNetVL.default_channel_conf:
-                    await ctx.send(content="There is no feed setting called {}.".format(self.escape_text(key)))
+                is_changing = True
+                header = "{} setting was set:".format(channel.mention)
+
+            if not key.lower() in BotNetVL.channel_conf:
+                if not "*" in key and not "?" in key and not "[" in key and not "]" in key:
+                    key = key + "*"
+                key_matches = fnmatch.filter(BotNetVL.channel_conf.keys(), key)
+                if len(key_matches) == 0:
+                    await ctx.send(content="There is no {} setting called `{}`.".format(channel.mention, self.escape_code_text(key)))
                     return
-                if not key.lower() in BotNetVL.default_channel_conf_user_settable:
+                elif len(key_matches) > 1 and is_changing:
+                    await ctx.send(content="Multiple {} settings match `{}`.".format(channel.mention, self.escape_code_text(key)))
+                    return
+            else:
+                key_matches = [key.lower()]
+        
+            if is_changing:
+                key = key_matches[0]
+                conf_set = BotNetVL.channel_conf[key]
+                if not conf_set["bncsset-edit"]:
                     await ctx.send(content="You may not set the feed setting called {}.".format(self.escape_text(key)))
                     return
-                key = key.lower()
-                if   len(ctx.message.mentions) == 1:
-                    val = ctx.message.mentions[0].id
-                elif len(ctx.message.channel_mentions) == 1:
-                    val = ctx.message.channel_mentions[0].id
-                elif len(ctx.message.role_mentions) == 1:
-                    val = ctx.message.role_mentions[0].id
-                elif val.startswith("\"") and val.endswith("\"") and len(val) >= 2:
-                    val = val[1:-2]
-                elif val.isnumeric():
-                    val = int(val)
-                elif val.lower() in ["true", "t", "yes", "y", "on"]:
-                    val = True
-                elif val.lower() in ["false", "f", "no", "n", "off"]:
-                    val = False
-                elif val.lower() in ["none", "null", "nil"]:
-                    val = None
-                await self.config.get_attr(key).set(val)
-                data = {key: val}
+                val = self.parse_conf_value(ctx, val, conf_set["type"])
+                data = {key: str(val)}
+                await self.config.channel(channel).get_attr(key).set(val)
                 setattr(self.channel_states[channel.id], key, val)
-                await ctx.send(content="{} feed setting has been set:\n".format(channel.mention, self.print_settings_dict(ctx, data)))
+            else:
+                data = {}
+                for key in key_matches:
+                    data[key] = await self.config.channel(channel).get_attr(key)()
+            await ctx.send(content="{}\n{}".format(header, self.print_conf_data(ctx, data)))
         except Exception as ex:
             print("BotNet EXCEPTION getting/setting channel setting: {}".format(ex))
 
