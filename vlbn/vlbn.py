@@ -530,21 +530,25 @@ class BotNetVL:
                 if channel_state.do_users_pin:
                     # find message object if stored
                     if channel_state.users_pin == 0:
-                        print("Pin not set!")
+                        #print("Pin not set!")
                         to_create = True
                     else:
                         try:
                             post = await channel.get_message(channel_state.users_pin)
                             if post.author.id != self.bot.user.id:
                                 # not ours...
-                                print("Pin not owned!")
+                                #print("Pin not owned!")
                                 to_create = True
 
                             to_create = False
-                        except discord.NotFound as ex:
+                        except discord.NotFound:
                             # message was deleted
-                            print("Pin not found!")
+                            #print("Pin not found!")
                             to_create = True
+                        except discord.Forbidden:
+                            #print("Pin inaccessible!")
+                            to_create = False
+                            return
                         except Exception as ex:
                             # named but not accessible or something
                             print("BotNet EXCEPTION finding a stored pin ID: {}".format(ex))
@@ -565,13 +569,36 @@ class BotNetVL:
                     # create or update the post
                     if to_create:
                         # creating and pinning post
+                        post = None
                         try:
                             post = await channel.send(content=text)
+                        except discord.Forbidden:
+                            # write failed
+                            #print("Message write forbidden!")
+                            return
+                        except discord.NotFound:
+                            # write failed
+                            #print("Message write not allowed to inaccessible channel!")
+                            return
+                        except Exception as ex:
+                            print("BotNet EXCEPTION posting a userlist: {}".format(ex))
+                        try:
                             await post.pin()
+                        except discord.Forbidden:
+                            # pin failed
+                            #print("Pinning forbidden!")
+                            pass
+                        except discord.NotFound:
+                            # pin missing
+                            #print("Message gone!")
+                            return
+                        except Exception as ex:
+                            print("BotNet EXCEPTION pinning a userlist: {}".format(ex))
+                        try:
                             channel_state.users_pin = post.id
                             await self.save_channel_config(channel, channel_state)
                         except Exception as ex:
-                            print("BotNet EXCEPTION posting and pinning a userlist: {}".format(ex))
+                            print("BotNet EXCEPTION saving a userlist: {}".format(ex))
 
                     else:
                         # updating a pinned post
@@ -579,6 +606,14 @@ class BotNetVL:
                             # not pinned
                             try:
                                 await post.pin()
+                            except discord.Forbidden:
+                                # pin failed
+                                #print("Pinning forbidden!")
+                                pass
+                            except discord.NotFound:
+                                # pin missing
+                                #print("Message gone!")
+                                return
                             except Exception as ex:
                                 print("BotNet EXCEPTION pinning a userlist: {}".format(ex))
                         try:
@@ -751,7 +786,6 @@ class BotNetVL:
                             user_obj = None
 
                         # save this (REFERENCE) in channel state
-                        print(channel_state.account_relay, str(user))
                         channel_state.account_relay_object = user_obj
 
                         # post BNCS userlist
@@ -863,7 +897,6 @@ class BotNetVL:
                             break
                     if user_obj is None:
                         # make dummy
-                        print("BotNet WebChannel Message from unseen user {}".format(evus))
                         user_obj = BotNetVLWebChannelUser(evus, evfl, evpi, "", 0, channel_state.account_relay_object.bnet_name == evus)
 
                     emote = (evid == 0x17)
