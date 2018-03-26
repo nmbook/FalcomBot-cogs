@@ -900,6 +900,9 @@ class BotNetVL:
                 evid = int(evid, 16)
                 evfl = int(evfl, 16)
                 evpi = int(evpi, 16)
+                # make ping signed 32-bit integer
+                if evpi & 0x80000000:
+                    evpi = -0x100000000 + evpi
                 evtm = int(evtm, 16)
                 if evid == 0x00 or evid == 0x05 or evid == 0x06 or evid == 0x12 or evid == 0x13 or evid == 0x17:
                     # chat events (self, talk, emote)
@@ -1674,9 +1677,6 @@ class BotNetVLWebChannelUser:
         self.text = text
         self.index = index
         self.is_self = is_self
-
-        if self.ping == 0xffffffff:
-            self.ping = -1
 
     def __str__(self):
         return self.name
