@@ -3,7 +3,7 @@ from discord.ext import commands
 from redbot.core import Config
 from redbot.core import checks
 from redbot.core.utils.chat_formatting import escape, info, error
-from datetime import datetime
+from datetime import datetime, timedelta
 import asyncio
 import concurrent.futures
 import fnmatch
@@ -665,12 +665,18 @@ class BotNetVL:
                     except Exception as ex:
                         print("BotNet EXCEPTION posting join/part alert: {}".format(ex))
 
-    async def post_chat(self, channel, channel_state, user, text, *, emote = False, broadcast = False, info = False, error = False, no_user = False):
+    async def post_chat(self, channel, channel_state, user, text, *, time = None, emote = False, broadcast = False, info = False, error = False, no_user = False):
         """Posts a remote message to a feed channel."""
         if self.state.chat_ready:
             if not channel_state is None:
                 try:
-                    timestamp = datetime.utcnow().strftime("%H:%M:%S")
+                    if time:
+                        dt = datetime.utcnow()
+                        dt = datetime(dt.year, dt.month, dt.day, tzinfo=dt.tzinfo)
+                        dt += timedelta(seconds=time)
+                    else:
+                        dt = datetime.utcnow()
+                    timestamp = dt.strftime("%H:%M:%S")
                     if broadcast:
                         bctext = "__**{}BROADCAST**__ "
                     elif info:
@@ -901,6 +907,7 @@ class BotNetVL:
                     no_user = (broadcast or info or error)
 
                     coro = self.post_chat(channel, channel_state, user_obj, evtx, \
+                            time = evtm, \
                             emote = emote, broadcast = broadcast, \
                             info = info, error = error, no_user = no_user)
                     self.tasks.append(self.bot.loop.create_task(coro))
