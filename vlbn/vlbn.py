@@ -888,6 +888,12 @@ class BotNetVL:
             elif cmd == "CHATOFF":
                 # disable chat back
                 channel_state.chat_disabled = True
+            elif cmd == "TEXT":
+                # special TEXT raw message
+                [evtm, evtx] = data.split(" ", 1)
+                evtm = int(evtm, 16)
+                coro = self.post_chat(channel, channel_state, None, evtx, time = evtm)
+                self.tasks.append(self.bot.loop.create_task(coro))
             elif cmd == "EVENT":
                 # event parsing
                 [evid, evfl, evpi, evtm, evus, evtx] = data.split(" ", 5)
