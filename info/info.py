@@ -72,6 +72,7 @@ class Info:
     async def userinfo(self, ctx, *, search_term = ''):
         print(search_term)
         search_term = search_term.strip()
+        user = None
         # is mention?
         if len(ctx.message.mentions) == 1:
             user = ctx.message.mentions[0]
@@ -80,20 +81,21 @@ class Info:
             user = ctx.author
         else:
             # is search_term on this guild?
-            user = ctx.guild.get_member_named(search_term)
+            if ctx.guild:
+                user = ctx.guild.get_member_named(search_term)
             if user is None:
                 # is search_term visible to bot at all?
                 all_members = self.bot.get_all_members()
                 user = discord.utils.find(lambda m: m.name == search_term, all_members)
                 if user is None:
                     # is search_term an ID?
-                    if str.isnumeric(search_term):
+                    if search_term.isnumeric():
                         # get their User object "from anywhere"
                         try:
                             user = await self.bot.get_user_info(int(search_term))
                             if user.id in [m.id for m in all_members]:
                                 user = discord.utils.find(lambda m: m.id == user.id, all_members)
-                        except discord.errors.NotFound:
+                        except discord.NotFound:
                             # user not found
                             user = None
 
@@ -102,7 +104,7 @@ class Info:
             return
 
         def status2emoji(user_obj):
-            if user_obj.game is None:
+            if not hasattr(user_obj, "game") or user_obj.game is None:
                 if   user_obj.status == discord.Status.online: # online
                     return '\U0001f49a'
                 elif user_obj.status == discord.Status.idle: # idle
@@ -131,7 +133,7 @@ class Info:
         is_visible = hasattr(user, 'joined_at')
         if is_visible:
             game = '{e}: {status}'.format(e=status2emoji(user), status=user.status)
-            if user.game is None:
+            if not hasattr(user, "game") or user.game is None:
                 pass
             else:
                 if   user.game.type == 1: # stream
@@ -158,33 +160,36 @@ class Info:
             #    pretext = '<:DiscordStaff:328620818688901120> {}'.format(pretext)
             #if user.hypesquad: # hypesquad
             #    pretext = '<:DiscordHypeSquad:328619256705056770> {}'.format(pretext)
-            if ctx.guild.owner == user: # crown
+            if ctx.guild and ctx.guild.owner == user: # crown
                 pretext = '\U0001f451 {}'.format(pretext)
             if len(pretext):
                 game = pretext + '\n\n' + game
 
-            is_member = user.guild == ctx.guild
-            if is_member:
-                color = user.color
-                
-                roles = [str(r) for r in sorted(user.roles, key=lambda r: r.position, reverse=True) if not r.is_default()]
+            if ctx.guild:
+                is_member = user.guild == ctx.guild
+                if is_member:
+                    color = user.color
+                    
+                    roles = [str(r) for r in sorted(user.roles, key=lambda r: r.position, reverse=True) if not r.is_default()]
 
-                guild_members = sorted(ctx.guild.members, key=lambda m: m.joined_at)
-                p = guild_members.index(user) + 1
-                p_before = ''
-                p_before1 = ''
-                p_after = ''
-                p_after1 = ''
-                if p > 1:
-                    p_before = guild_members[p - 2]
-                    p_before1 = ' > '
-                if p < len(guild_members):
-                    p_after = guild_members[p]
-                    p_after1 = ' > '
+                    guild_members = sorted(ctx.guild.members, key=lambda m: m.joined_at)
+                    p = guild_members.index(user) + 1
+                    p_before = ''
+                    p_before1 = ''
+                    p_after = ''
+                    p_after1 = ''
+                    if p > 1:
+                        p_before = guild_members[p - 2]
+                        p_before1 = ' > '
+                    if p < len(guild_members):
+                        p_after = guild_members[p]
+                        p_after1 = ' > '
 
-                pos_text = '**{}**: {}{}**{}**{}{}'.format(p, p_before, p_before1, user, p_after1, p_after)
+                    pos_text = '**{}**: {}{}**{}**{}{}'.format(p, p_before, p_before1, user, p_after1, p_after)
+                else:
+                    game = game + '\n\n*Not on this server.*'
             else:
-                game = game + '\n\n*Not on this server.*'
+                is_member = False
         else:
             is_member = False
 
@@ -203,6 +208,7 @@ class Info:
             else:
                 data.add_field(name='Roles', value='*None*')
             data.add_field(name='Position', value=pos_text)
+        data.set_footer(text="ID: {}".format(user.id))
 
         # embed avatar
         if user.avatar_url:
