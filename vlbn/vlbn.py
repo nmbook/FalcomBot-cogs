@@ -154,49 +154,63 @@ class BotNetVL:
 
         The core logic of the BotNet feed. Sets up and awaits in a receive loop."""
 
-        await self.load_config()
+        while True:
+            try:
+                await self.load_config()
 
-        try:
-            if len(self.state.server) == 0:
-                print("No BotNet server set.")
+                print("Connecting to {}...".format(self.state.server))
+
+                if len(self.state.server) == 0:
+                    print("No BotNet server set.")
+                    return
+
+                self.state.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                self.state.socket.setblocking(False)
+
+                await self.bot.loop.sock_connect(self.state.socket, (self.state.server, self.state.port))
+
+                #print("connected")
+
+                to_send = self.botnet_on_connected()
+
+                #self.bot.loop.create_task(150, self.keep_alive, feed)
+
+                while True: # receive loop
+                    await self.send_resp(to_send)
+                    packet = await self.get_packet()
+                    if packet is None:
+                        break
+                    to_send = self.botnet_on_packet(packet)
+                if self.state.socket:
+                    # connection closed
+                    print("BotNet connection closed.")
+                    self.state.socket.close()
+                    self.state.socket = None
+                    # wait 60 seconds and reconnect
+                    await asyncio.sleep(60)
+            except concurrent.futures.CancelledError as ex:
+                # module unload or other cancel
                 return
-
-            self.state.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            self.state.socket.setblocking(False)
-
-            await self.bot.loop.sock_connect(self.state.socket, (self.state.server, self.state.port))
-
-            #print("connected")
-
-            to_send = self.botnet_on_connected()
-
-            #self.bot.loop.create_task(150, self.keep_alive, feed)
-
-            while True: # receive loop
-                await self.send_resp(to_send)
-                packet = await self.get_packet()
-                if packet is None:
-                    break
-                to_send = self.botnet_on_packet(packet)
-            if self.state.socket:
-                print("Closing socket (eof)...")
-                self.state.socket.close()
-                self.state.socket = None
-        except concurrent.futures.CancelledError as ex:
-            # module unload
-            pass
-        except IOError as ex:
-            # unspecified error
-            print("BotNet connection error: {}".format(ex))
-        except Exception as ex:
-            # unspecified error
-            print("BotNet uncaught Exception: {}".format(ex))
-            traceback.print_exc()
-        finally:
-            if self.state.socket:
-                print("Closing socket (error)...")
-                self.state.socket.close()
-                self.state.socket = None
+            except OSError as ex:
+                # unspecified error
+                print("BotNet connection error: {}".format(ex))
+                if self.state.socket:
+                    self.state.socket.close()
+                    self.state.socket = None
+                    # wait 60 seconds and reconnect
+                    await asyncio.sleep(60)
+            except Exception as ex:
+                # main loop error (uncaught exception in packet parsing and handling...)
+                print("BotNet uncaught Exception: {}".format(ex))
+                traceback.print_exc()
+            finally:
+                if self.state.socket:
+                    # main loop error
+                    print("BotNet connection terminating.")
+                    self.state.socket.close()
+                    self.state.socket = None
+                    # wait 60 seconds and reconnect
+                    await asyncio.sleep(60)
 
     def botnet_on_connected(self):
         """On Connected Event
@@ -422,12 +436,13 @@ class BotNetVL:
         """Send Response
         
         Send generated response(s) in to_send array to the socket. Used with constructed packets."""
-        for resp in to_send:
-            if resp is None: # yield None pauses instead of sends
-                await asyncio.sleep(1)
-            else:
-                #print("send pkt 0x{:02x} len {}\n{}".format(bytes(resp)[1], len(resp), bytes(resp)))
-                await self.bot.loop.sock_sendall(self.state.socket, bytes(resp))
+        if self.state.socket:
+            for resp in to_send:
+                if resp is None: # yield None pauses instead of sends
+                    await asyncio.sleep(1)
+                else:
+                    #print("send pkt 0x{:02x} len {}\n{}".format(bytes(resp)[1], len(resp), bytes(resp)))
+                    await self.bot.loop.sock_sendall(self.state.socket, bytes(resp))
 
     async def on_message(self, message):
         """Handle on_message to send back to BotNet."""
@@ -795,69 +810,72 @@ class BotNetVL:
 
     def botnet_on_chat(self, user, message, command, action):
         """Event that occurs when chat is received."""
-        #print("BotNet CHAT from {}: {}".format(user, message))
-        for channel_id, channel_state in self.channel_states.items():
-            if channel_state.feed_type == "botnet":
-                if command == 0x02:
-                    # whisper... webchannel check
-                    wc_status_check = False
-                    if message.upper().startswith("CHATON"):
-                        message = "CHATON"
-                        wc_status_check = True
-                        wc_status_found = False
-                        wc_status = "STATUS ERROR 4 No feeds."
-                    elif message.upper().startswith("CHATOFF"):
-                        message = "CHATOFF"
-                        wc_status_check = True
-                        wc_status_found = False
-                        wc_status = "STATUS ERROR 4 No feeds."
+        try:
+            #print("BotNet CHAT from {}: {}".format(user, message))
+            for channel_id, channel_state in self.channel_states.items():
+                if channel_state.feed_type == "botnet":
+                    if command == 0x02:
+                        # whisper... webchannel check
+                        wc_status_check = False
+                        if message.upper().startswith("CHATON"):
+                            message = "CHATON"
+                            wc_status_check = True
+                            wc_status_found = False
+                            wc_status = "STATUS ERROR 4 No feeds."
+                        elif message.upper().startswith("CHATOFF"):
+                            message = "CHATOFF"
+                            wc_status_check = True
+                            wc_status_found = False
+                            wc_status = "STATUS ERROR 4 No feeds."
 
-                    if not user.is_on_account():
-                        wc_status = "STATUS ERROR 3 You must be on a BotNet account."
-                    else:
-                        # pass message to processor for each feed
-                        for wc_channel_id, wc_channel_state in self.channel_states.items():
-                            if wc_channel_state.feed_type == "bncs":
-                                if not wc_channel_state.account_relay_object is None:
-                                    if wc_channel_state.account_relay == user.account:
-                                        wc_channel = self.bot.get_channel(wc_channel_id)
-                                        if wc_channel:
-                                            # dispatch to this feed
-                                            try:
-                                                self.botnet_wc_on_text(wc_channel, wc_channel_state, message)
+                        if not user.is_on_account():
+                            wc_status = "STATUS ERROR 3 You must be on a BotNet account."
+                        else:
+                            # pass message to processor for each feed
+                            for wc_channel_id, wc_channel_state in self.channel_states.items():
+                                if wc_channel_state.feed_type == "bncs":
+                                    if not wc_channel_state.account_relay_object is None:
+                                        if wc_channel_state.account_relay == user.account:
+                                            wc_channel = self.bot.get_channel(wc_channel_id)
+                                            if wc_channel:
+                                                # dispatch to this feed
+                                                try:
+                                                    self.botnet_wc_on_text(wc_channel, wc_channel_state, message)
 
+                                                    if wc_status_check and not wc_status_found:
+                                                        wc_status = "STATUS {} #{} {}".format(message, wc_channel.name, wc_channel.guild.name)
+                                                        wc_status_found = True
+                                                except Exception as ex:
+                                                    if wc_status_check and not wc_status_found:
+                                                        wc_status = "STATUS ERROR 0 An exception occured: {}".format(ex)
+                                                        wc_status_found = True
+                                            else:
                                                 if wc_status_check and not wc_status_found:
-                                                    wc_status = "STATUS {} #{} {}".format(message, wc_channel.name, wc_channel.guild.name)
-                                                    wc_status_found = True
-                                            except Exception as ex:
-                                                if wc_status_check and not wc_status_found:
-                                                    wc_status = "STATUS ERROR 0 An exception occured: {}".format(ex)
-                                                    wc_status_found = True
-                                        else:
-                                            if wc_status_check and not wc_status_found:
-                                                wc_status = "STATUS ERROR 2 Discord channel inaccessible with ID {}.".format(wc_channel_id)
+                                                    wc_status = "STATUS ERROR 2 Discord channel inaccessible with ID {}.".format(wc_channel_id)
 
-                    if wc_status_check:
-                        if not wc_status_found:
-                            wc_status = "STATUS ERROR 1 There are no feeds expecting that account.".format(wc_channel_state.account_relay)
-                        print(user.account, wc_status)
-                        to_send = [self.send_chat(wc_status, whisper_to = user.bot_id)]
-                        coro = self.send_resp(to_send)
-                        self.tasks.append(self.bot.loop.create_task(coro))
+                        if wc_status_check:
+                            if not wc_status_found:
+                                wc_status = "STATUS ERROR 1 There are no feeds expecting that account.".format(wc_channel_state.account_relay)
+                            print(user.account, wc_status)
+                            to_send = [self.send_chat(wc_status, whisper_to = user.bot_id)]
+                            coro = self.send_resp(to_send)
+                            self.tasks.append(self.bot.loop.create_task(coro))
 
-                    # end of webchannel check
-                    return
+                        # end of webchannel check
+                        return
 
-                try:
-                    channel = self.bot.get_channel(channel_id)
-                    if channel:
-                        emote = (action == 0x01)
-                        broadcast = (command == 0x00)
+                    try:
+                        channel = self.bot.get_channel(channel_id)
+                        if channel:
+                            emote = (action == 0x01)
+                            broadcast = (command == 0x00)
 
-                        coro = self.post_chat(channel, channel_state, user, message, emote = emote, broadcast = broadcast)
-                        self.tasks.append(self.bot.loop.create_task(coro))
-                except Exception as ex:
-                    print("BotNet EXCEPTION posting chat: {}".format(ex))
+                            coro = self.post_chat(channel, channel_state, user, message, emote = emote, broadcast = broadcast)
+                            self.tasks.append(self.bot.loop.create_task(coro))
+                    except Exception as ex:
+                        print("BotNet EXCEPTION posting chat: {}".format(ex))
+        except Exception as ex2:
+            print("BotNet EXCEPTION posting chat: {}".format(ex2))
 
     def botnet_wc_on_text(self, channel, channel_state, text):
         """Called when the BotNet WebClient account sent a whisper."""
