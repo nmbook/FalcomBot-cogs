@@ -178,10 +178,16 @@ class BotNetVL:
                     print("BotNet connection closed.")
                     self.state.socket.close()
                     self.state.socket = None
+                    self.state.chat_ready = False
                     # wait 60 seconds and reconnect
                     await asyncio.sleep(60)
             except concurrent.futures.CancelledError as ex:
-                # module unload or other cancel
+                if self.state.socket:
+                    # module unload or other cancel -- no return here
+                    print("BotNet module terminating.")
+                    self.state.socket.close()
+                    self.state.socket = None
+                    self.state.chat_ready = False
                 return
             except OSError as ex:
                 # unspecified error
@@ -189,6 +195,7 @@ class BotNetVL:
                 if self.state.socket:
                     self.state.socket.close()
                     self.state.socket = None
+                    self.state.chat_ready = False
                     # wait 60 seconds and reconnect
                     await asyncio.sleep(60)
             except Exception as ex:
@@ -201,6 +208,7 @@ class BotNetVL:
                     print("BotNet connection terminating.")
                     self.state.socket.close()
                     self.state.socket = None
+                    self.state.chat_ready = False
                     # wait 60 seconds and reconnect
                     await asyncio.sleep(60)
 
