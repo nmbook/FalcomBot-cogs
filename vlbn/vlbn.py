@@ -1624,6 +1624,62 @@ class BotNetVL:
         except Exception as ex:
             print("BotNet EXCEPTION getting/setting channel setting: {}".format(ex))
 
+    @commands.command()
+    @checks.guildowner_or_permissions(manage_guild=True)
+    async def bncsstatus(self, ctx, account_name):
+        """Returns the Battle.net feed(s) that are relaying from the provided BotNet account."""
+        restricted = not self.bot.is_owner(ctx.author)
+
+        if restricted and ctx.guild is None:
+            await ctx.send(error("You cannot get a feed status outside of a server."))
+            return
+
+        feeds = []
+        for channel_id, channel_state in self.channel_states.items():
+            if channel_state.feed_type == "bncs":
+                if channel_state.account_relay.lower() == account_name.lower():
+                    if restricted and ctx.guild.id != channel_state.guild:
+                        # not for thine eyes
+                        continue
+
+                    feed = { "botnet_online": False }
+
+                    for bot_id, botnet_user in self.state.users.items():
+                        if botnet_user.is_on_account() and botnet_user.account.lower() == account_name.lower():
+                            feed["botnet_online"] = True
+                            feed["botnet_bot_id"] = botnet_user.bot_id
+                            feed["botnet_bot_account"] = botnet_user.account
+                            break
+
+                    channel = self.bot.get_channel(channel_id)
+                    if   not channel:
+                        feed["error_code"] = 3
+                        feed["error"] = "Discord channel inaccessible."
+                    elif not isinstance(channel, discord.TextChannel):
+                        feed["channel_id"] = channel.id
+                        feed["channel"] = "#{}".format(channel.name)
+                        feed["guild_id"] = channel.guild.id
+                        feed["guild"] = channel.guild.name
+                        feed["error_code"] = 4
+                        feed["error"] = "Discord channel not a TextChannel."
+                    else:
+                        feed["channel_id"] = channel.id
+                        feed["channel"] = "#{}".format(channel.name)
+                        feed["guild_id"] = channel.guild.id
+                        feed["guild"] = channel.guild.name
+
+                    feeds.append(feed)
+
+        if len(feeds) == 0:
+            await ctx.send(error("There are no feeds expecting that account."))
+        else:
+            res = ""
+            n = 0
+            for feed in feeds:
+                res += "Feed result #{}:\n{}\n".format(n + 1, self.print_conf_data(ctx, feed))
+                n += 1
+            await ctx.send(content="{}\n\n{}".format(info("{} results.".format(n)), res))
+
 class BotNetVLState():
     """Current state object."""
     def __init__(self):
