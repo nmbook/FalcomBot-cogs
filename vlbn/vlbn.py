@@ -818,196 +818,104 @@ class BotNetVL:
         """Event that occurs when chat is received."""
         try:
             #print("BotNet CHAT from {}: {}".format(user, message))
-            for channel_id, channel_state in self.channel_states.items():
-                if channel_state.feed_type == "botnet":
-                    if command == 0x02:
-                        # whisper... webchannel check
-                        wc_status_check = False
-                        if message.upper().startswith("CHATON"):
-                            message = "CHATON"
-                            wc_status_check = True
-                            wc_status_found = False
-                            wc_status = "STATUS ERROR 4 No feeds."
-                        elif message.upper().startswith("CHATOFF"):
-                            message = "CHATOFF"
-                            wc_status_check = True
-                            wc_status_found = False
-                            wc_status = "STATUS ERROR 4 No feeds."
+            if   command == 0x00 or command == 0x01:
+                # BotNet chat or broadcast
+                emote = (action == 0x01)
+                broadcast = (command == 0x00)
 
-                        if not user.is_on_account():
-                            wc_status = "STATUS ERROR 3 You must be on a BotNet account."
-                        else:
-                            # pass message to processor for each feed
-                            for wc_channel_id, wc_channel_state in self.channel_states.items():
-                                if wc_channel_state.feed_type == "bncs":
-                                    if not wc_channel_state.account_relay_object is None:
-                                        if wc_channel_state.account_relay == user.account:
-                                            wc_channel = self.bot.get_channel(wc_channel_id)
-                                            if wc_channel:
-                                                # dispatch to this feed
-                                                try:
-                                                    self.botnet_wc_on_text(wc_channel, wc_channel_state, message)
-
-                                                    if wc_status_check and not wc_status_found:
-                                                        wc_status = "STATUS {} #{} {}".format(message, wc_channel.name, wc_channel.guild.name)
-                                                        wc_status_found = True
-                                                except Exception as ex:
-                                                    if wc_status_check and not wc_status_found:
-                                                        wc_status = "STATUS ERROR 0 An exception occured: {}".format(ex)
-                                                        wc_status_found = True
-                                            else:
-                                                if wc_status_check and not wc_status_found:
-                                                    wc_status = "STATUS ERROR 2 Discord channel inaccessible with ID {}.".format(wc_channel_id)
-
-                        if wc_status_check:
-                            if not wc_status_found:
-                                wc_status = "STATUS ERROR 1 There are no feeds expecting that account.".format(wc_channel_state.account_relay)
-                            print(user.account, wc_status)
-                            to_send = [self.send_chat(wc_status, whisper_to = user.bot_id)]
-                            coro = self.send_resp(to_send)
-                            self.tasks.append(self.bot.loop.create_task(coro))
-
-                        # end of webchannel check
-                        return
-
-                    try:
+                for channel_id, channel_state in self.channel_states.items():
+                    if channel_state.feed_type == "botnet":
                         channel = self.bot.get_channel(channel_id)
-                        if channel:
-                            emote = (action == 0x01)
-                            broadcast = (command == 0x00)
-
+                        if channel and isinstance(channel, discord.TextChannel):
                             coro = self.post_chat(channel, channel_state, user, message, emote = emote, broadcast = broadcast)
                             self.tasks.append(self.bot.loop.create_task(coro))
-                    except Exception as ex:
-                        print("BotNet EXCEPTION posting chat: {}".format(ex))
-        except Exception as ex2:
-            print("BotNet EXCEPTION posting chat: {}".format(ex2))
+                        else:
+                            # channel does not exist
+                            continue
 
-    def botnet_wc_on_text(self, channel, channel_state, text):
-        """Called when the BotNet WebClient account sent a whisper."""
+            elif command == 0x02:
+                # BotNet whisper, interpret as BNCS WebChannel command
+                for action in self.botnet_parse_bncs_event(user, message):
+                    if action["target"] == "global":
+                        coro = self.botnet_dispatch_bncs_event(None, None, user, message, action)
+                        self.tasks.append(self.bot.loop.create_task(coro))
+                    elif action["target"] == "feed":
+                        for channel_id, channel_state in self.channel_states.items():
+                            if channel_state.feed_type == "bncs":
+                                channel = self.bot.get_channel(channel_id)
+                                if channel and isinstance(channel, discord.TextChannel):
+                                    coro = self.botnet_dispatch_bncs_event(channel, channel_state, user, message, action)
+                                    self.tasks.append(self.bot.loop.create_task(coro))
+                                else:
+                                    # channel does not exist
+                                    continue
+
+        except Exception as ex2:
+            print("BotNet EXCEPTION parsing BotNet chat: {}".format(ex2))
+
+    def botnet_parse_bncs_event(self, user, message):
+        """Parses the given BotNet whisper as a WebChannel message."""
         try:
-            cmd, sep, data = text.partition(" ")
+            cmd, sep, data = message.lstrip().partition(" ")
             cmd = cmd.upper()
             if   cmd == "CHATON":
                 # enable chat back
-                channel_state.chat_disabled = False
+                yield { "target": "feed", "type": "set_key", "key": "chat_disabled", "value": False }
+                yield { "target": "global", "type": "request_status", "chat": True }
             elif cmd == "CHATOFF":
                 # disable chat back
-                channel_state.chat_disabled = True
+                yield { "target": "feed", "type": "set_key", "key": "chat_disabled", "value": True }
+                yield { "target": "global", "type": "request_status", "chat": False }
             elif cmd == "TEXT":
                 # special TEXT raw message
                 [evtm, evtx] = data.split(" ", 1)
-                evtm = int(evtm, 16)
-                coro = self.post_chat(channel, channel_state, None, evtx, time = evtm)
-                self.tasks.append(self.bot.loop.create_task(coro))
+                try:
+                    evtm = int(evtm, 16)
+                except ValueError:
+                    # not a valid timestamp
+                    return
+                yield { "target": "feed", "type": "post_chat", "args": { "user": None, "text": evtx, "time": evtm } }
             elif cmd == "EVENT":
                 # event parsing
                 [evid, evfl, evpi, evtm, evus, evtx] = data.split(" ", 5)
-                evid = int(evid, 16)
-                evfl = int(evfl, 16)
-                evpi = int(evpi, 16)
+                try:
+                    evid = int(evid, 16)
+                    evfl = int(evfl, 16)
+                    evpi = int(evpi, 16)
+                    evtm = int(evtm, 16)
+                except ValueError:
+                    # not a valid id, flags, ping, or timestamp
+                    return
+
                 # make ping signed 32-bit integer
                 if evpi & 0x80000000:
                     evpi = -0x100000000 + evpi
-                evtm = int(evtm, 16)
+
+                # if "[Server Broadcast] " EID_ERROR
+                if evid == 0x13 and evtx.lower().startswith("[server broadcast] "):
+                    # fake EID_BROADCAST
+                    evtx = evtx[19:]
+                    evid = 0x06
+
+                # if username starts with "w#", strip it now
+                if evus.lower().startswith("w#"):
+                    evus = evus[2:]
+
+                # store ev object
+                ev = { "id": evid, "flags": evfl, "ping": evpi, "time": evtm, "name": evus, "text": evtx }
                 if evid == 0x00 or evid == 0x05 or evid == 0x06 or evid == 0x12 or evid == 0x13 or evid == 0x17:
-                    # chat events (self, talk, emote)
-                    # if "[Server Broadcast] " EID_ERROR
-                    if evid == 0x13 and evtx.lower().startswith("[server broadcast] "):
-                        # fake EID_BROADCAST
-                        evtx = evtx[19:]
-                        evid = 0x06
-
-                    # if username starts with "w#", strip it now
-                    if evus.lower().startswith("w#"):
-                        evus = evus[2:]
-
-                    # find user in user list
-                    user_obj = None
-                    for user in channel_state.users:
-                        if user.name == evus and user.ping == evpi:
-                            # this is this user
-                            user_obj = user
-                            break
-                    if user_obj is None:
-                        # make dummy
-                        user_obj = BotNetVLWebChannelUser(evus, evfl, evpi, "", 0, channel_state.account_relay_object.bnet_name == evus)
-
-                    emote = (evid == 0x17)
-                    broadcast = (evid == 0x06)
-                    info = (evid == 0x12)
-                    error = (evid == 0x13)
-                    no_user = (broadcast or info or error)
-
-                    coro = self.post_chat(channel, channel_state, user_obj, evtx, \
-                            time = evtm, \
-                            emote = emote, broadcast = broadcast, \
-                            info = info, error = error, no_user = no_user)
-                    self.tasks.append(self.bot.loop.create_task(coro))
+                    # chat events (self, talk, server broadcast, server info, server error, emote)
+                    yield { "target": "feed", "type": "event_chat", "event": ev }
                 elif evid == 0x04 or evid == 0x0A:
                     # whisper events
                     # skip
                     pass
                 elif evid == 0x01 or evid == 0x02 or evid == 0x03 or evid == 0x09:
-                    # user update events
-                    user_obj = None
-                    for user in channel_state.users:
-                        if user.name == evus and user.ping == evpi:
-                            # this is this user
-                            user_obj = user
-                            break
-                    
-                    is_self = (channel_state.account_relay_object.bnet_name == evus)
-
-                    # decide how to handle event to update data
-                    if   evid == 0x03: # leave
-                        if not user_obj is None:
-                            channel_state.users.remove(user_obj)
-
-                    elif evid == 0x02 or user_obj is None: # join/new user
-                        channel_state.join_counter += 1
-                        user_obj = BotNetVLWebChannelUser(evus, evfl, evpi, evtx, channel_state.join_counter, is_self)
-                        channel_state.users.append(user_obj)
-
-                    elif not user_obj is None: # update/existing user
-                        user_obj.flags = evfl
-                        user_obj.ping = evpi
-                        if len(evtx) > 0:
-                            user_obj.text = evtx
-
-                    if not user_obj is None:
-                        if evid == 0x02:
-                            # post BotNet join/part alert
-                            coro = self.post_joinpart(channel, channel_state, user_obj, "JOIN", time = evtm)
-                            self.tasks.append(self.bot.loop.create_task(coro))
-                        elif evid == 0x03:
-                            # post BotNet join/part alert
-                            coro = self.post_joinpart(channel, channel_state, user_obj, "PART", time = evtm)
-                            self.tasks.append(self.bot.loop.create_task(coro))
-
-                    # decide how to dispatch
-                    if evid == 0x02 or \
-                       evid == 0x03 or \
-                       evid == 0x09 or \
-                       is_self:
-                        # reasons to update:
-                        # - event is join, leave, or flagupdate
-                        # - showuser is for WebChannel relay on BotNet's Battle.net name
-                        coro = self.post_userlist(channel, channel_state)
-                        self.tasks.append(self.bot.loop.create_task(coro))
-                        channel_state.userlist_dirty = False
-                    else:
-                        channel_state.userlist_dirty = True
-                        # don't allow it to be consumed later, return here
-                        return
-
+                    # join/part/update
+                    yield { "target": "feed", "type": "event_joinpart", "event": ev }
                 elif evid == 0x07:
                     # enter channel
-                    # clear our wc user list
-                    # let the BotNet update change pin
-                    del channel_state.users[:]
-                    channel_state.join_counter = 0
-                    channel_state.userlist_dirty = False
+                    yield { "target": "feed", "type": "event_channel", "event": ev }
             elif cmd == "URL":
                 # URL info for WebChannel
                 # information is unnecessary
@@ -1015,15 +923,169 @@ class BotNetVL:
             else:
                 # unknown
                 print("BotNet WARNING BotNet WebChannel received unknown command: {} {}".format(cmd, data))
-
-            # if we got here, we processed a line and our userlist is still dirty, update it
-            if channel_state.userlist_dirty:
-                channel_state.userlist_dirty = False
-                coro = self.post_userlist(channel, channel_state)
-                self.tasks.append(self.bot.loop.create_task(coro))
-            return
         except Exception as ex:
-            print("BotNet EXCEPTION handling BotNet WebChannel event: {}".format(ex))
+            print("BotNet EXCEPTION parsing BotNet WebChannel command: {}".format(ex))
+
+    async def botnet_dispatch_bncs_event(self, channel, channel_state, botnet_user, botnet_message, action):
+        """Handles the given BNCS feed event."""
+        try:
+            if channel_state is None:
+                if action["type"] == "request_status":
+                    status = [ "ERROR", 0, ""]
+                    try:
+                        # tell BotNet user about status
+                        if not botnet_user.is_on_account():
+                            status[1] = 2
+                            status[2] = "You must be on a BotNet account."
+                        else:
+                            # find this account's "first" feed and store it
+                            first_feed = None
+                            first_channel_id = 0
+                            for channel_id, channel_state in self.channel_states.items():
+                                if channel_state.feed_type == "bncs":
+                                    if not channel_state.account_relay_object is None:
+                                        if channel_state.account_relay_object.account.lower() == botnet_user.account.lower():
+                                            first_feed = channel_state
+                                            first_channel_id = channel_id
+                                            break
+
+                            if first_feed is None:
+                                # error: no feeds are setup for that account
+                                status[1] = 1
+                                status[2] = "There are no feeds expecting that account."
+                            else:
+                                channel = self.bot.get_channel(first_channel_id)
+                                if   not channel:
+                                    # error: inaccessible Discord channel
+                                    status[1] = 3
+                                    status[2] = "Discord channel inaccessible."
+                                elif not isinstance(channel, discord.TextChannel):
+                                    # error: Discord channel is of wrong type
+                                    status[1] = 4
+                                    status[2] = "Discord channel not a TextChannel."
+                                else:
+                                    # successfully gathered status
+                                    if first_feed.chat_disabled:
+                                        status[0] = "CHATOFF"
+                                    else:
+                                        status[0] = "CHATON"
+                                    status[1] = "#{}".format(channel.name)
+                                    status[2] = channel.guild.name
+                    except Exception as ex:
+                        status[0] = "ERROR"
+                        status[1] = 0
+                        status[2] = "An exception occured."
+
+                    # send compiled status
+                    status.insert(0, "STATUS")
+                    status_str = " ".join(status)
+                    print("{} -> {}".format(botnet_user.account, status_str))
+                    to_send = [self.send_chat(status_str, whisper_to = botnet_user.bot_id)]
+                    await self.send_resp(to_send)
+
+            else:
+                if channel_state.account_relay_object is None or \
+                        channel_state.account_relay_object.account.lower() != botnet_user.account.lower():
+                    # this event does not belong to this BotNet user, channel_state pair
+                    return
+
+                if   action["type"] == "set_key":
+                    setattr(channel_state, action["key"], action["value"])
+
+                elif action["type"] == "post_chat":
+                    await self.post_chat(channel, channel_state, **action["args"])
+
+                elif action["type"] == "event_chat":
+                    # find user in user list
+                    user_obj = None
+                    for user in channel_state.users:
+                        if user.name == action["event"]["name"] and user.ping == action["event"]["ping"]:
+                            # this is this user
+                            user_obj = user
+                            break
+                    if user_obj is None:
+                        # make dummy
+                        user_obj = BotNetVLWebChannelUser(action["event"]["name"], \
+                                action["event"]["flags"], action["event"]["ping"], \
+                                "", 0, channel_state.account_relay_object.bnet_name == action["event"]["name"])
+
+                    emote = (action["event"]["id"] == 0x17)
+                    broadcast = (action["event"]["id"] == 0x06)
+                    info = (action["event"]["id"] == 0x12)
+                    error = (action["event"]["id"] == 0x13)
+                    no_user = (broadcast or info or error)
+
+                    await self.post_chat(channel, channel_state, user_obj, action["event"]["text"], \
+                            time = action["event"]["time"], \
+                            emote = emote, broadcast = broadcast, \
+                            info = info, error = error, no_user = no_user)
+
+                elif action["type"] == "event_joinpart":
+                    # user update events
+                    user_obj = None
+                    for user in channel_state.users:
+                        if user.name == action["event"]["name"] and user.ping == action["event"]["ping"]:
+                            # this is this user
+                            user_obj = user
+                            break
+                    
+                    is_self = (channel_state.account_relay_object.bnet_name == action["event"]["name"])
+
+                    # decide how to handle event to update data
+                    if   action["event"]["id"] == 0x03: # leave
+                        if not user_obj is None:
+                            channel_state.users.remove(user_obj)
+
+                    elif action["event"]["id"] == 0x02 or user_obj is None: # join/new user
+                        channel_state.join_counter += 1
+                        user_obj = BotNetVLWebChannelUser(action["event"]["name"], \
+                                action["event"]["flags"], action["event"]["ping"], \
+                                action["event"]["text"], channel_state.join_counter, is_self)
+                        channel_state.users.append(user_obj)
+
+                    elif not user_obj is None: # update/existing user
+                        user_obj.flags = action["event"]["flags"]
+                        user_obj.ping = action["event"]["ping"]
+                        if len(action["event"]["text"]) > 0:
+                            user_obj.text = action["event"]["text"]
+
+                    if not user_obj is None:
+                        if action["event"]["id"] == 0x02:
+                            uaction = "JOIN"
+                        elif action["event"]["id"] == 0x03:
+                            uaction = "PART"
+                        else:
+                            uaction = "UPDATE"
+                        # post BotNet join/part alert
+                        await self.post_joinpart(channel, channel_state, user_obj, uaction, time = action["event"]["time"])
+
+                    # decide how to dispatch
+                    if action["event"]["id"] == 0x02 or \
+                       action["event"]["id"] == 0x03 or \
+                       action["event"]["id"] == 0x09 or \
+                       is_self:
+                        # reasons to update:
+                        # - event is join, leave, or flagupdate
+                        # - showuser is for WebChannel relay on BotNet's Battle.net name
+                        await self.post_userlist(channel, channel_state)
+                        channel_state.userlist_dirty = False
+                    else:
+                        channel_state.userlist_dirty = True
+                        return
+
+                elif action["type"] == "event_channel":
+                    # clear our wc user list
+                    # let the BotNet update change pin
+                    del channel_state.users[:]
+                    channel_state.join_counter = 0
+                    channel_state.userlist_dirty = False
+
+                # if we got here, we processed a line and our userlist is still dirty, update it
+                if channel_state.userlist_dirty:
+                    channel_state.userlist_dirty = False
+                    await self.post_userlist(channel, channel_state)
+        except Exception as ex:
+            print("BotNet EXCEPTION handling BotNet WebChannel command: {}".format(ex))
 
     def escape_text(self, text):
         """Escapes text to be passed from BotNet to discord."""
