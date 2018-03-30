@@ -1415,12 +1415,12 @@ class BotNetVL:
         # reconnect BotNet to make use...
         for task in self.tasks:
             task.cancel()
-        self.tasks = []
+        del self.tasks[:]
         coro = self.botnet_main()
         self.tasks.append(self.bot.loop.create_task(coro))
 
     @commands.command()
-    @checks.guildowner_or_permissions(Administrator=True)
+    @checks.guildowner_or_permissions(manage_guild=True)
     async def bncsfeed(self, ctx, channel : discord.TextChannel, account_name : str):
         """Creates a feed between the Discord channel and a Classic Battle.net channel."""
         if channel.guild is None or ctx.guild is None or channel.guild.id != ctx.guild.id:
@@ -1512,7 +1512,7 @@ class BotNetVL:
             print("BotNet EXCEPTION getting/setting global setting: {}".format(ex))
 
     @commands.command(aliases=["bncsget"])
-    @checks.guildowner_or_permissions(Administrator=True)
+    @checks.guildowner_or_permissions(manage_guild=True)
     async def bncsset(self, ctx, channel : discord.TextChannel, key : str = "", *, val : str = ""):
         """Gets or sets settings for the Classic Battle.net feed."""
         if channel.guild is None or ctx.guild is None or channel.guild.id != ctx.guild.id:
