@@ -38,16 +38,16 @@ class BotNetVL:
     }
 
     channel_conf = {
-            "guild":            { "default": 0,      "bncsset-edit": False, "bncsset-causes-reset": False, "type": "guild-id", },
-            "channel_cb":       { "default": 0,      "bncsset-edit": False, "bncsset-causes-reset": False, "type": "channel-id", },
-            "feed_type":        { "default": "none", "bncsset-edit": False, "bncsset-causes-reset": False, "type": "one-of:none,botnet,bncs", },
-            "account_relay":    { "default": None,   "bncsset-edit": True,  "bncsset-causes-reset": True,  "type": "str", },
-            "users_pin":        { "default": 0,      "bncsset-edit": False, "bncsset-causes-reset": False, "type": "message-id", },
-            "chat_disabled":    { "default": False,  "bncsset-edit": False, "bncsset-causes-reset": False, "type": "bool", },
-            "chat_roles":       { "default": [],     "bncsset-edit": False, "bncsset-causes-reset": False, "type": "list-of:role-id", },
-            "do_users_pin":     { "default": True,   "bncsset-edit": True,  "bncsset-causes-reset": False, "type": "bool", },
-            "do_join_part":     { "default": True,   "bncsset-edit": True,  "bncsset-causes-reset": False, "type": "bool", },
-            "do_echo_self":     { "default": False,  "bncsset-edit": True,  "bncsset-causes-reset": False, "type": "bool", },
+            "guild":            { "default": 0,      "user-editable": False, "set-causes-reset": False, "type": "guild-id", },
+            "channel_cb":       { "default": 0,      "user-editable": False, "set-causes-reset": False, "type": "channel-id", },
+            "feed_type":        { "default": "none", "user-editable": False, "set-causes-reset": False, "type": "one-of:none,botnet,bncs", },
+            "account_relay":    { "default": None,   "user-editable": True,  "set-causes-reset": True,  "type": "str", },
+            "users_pin":        { "default": 0,      "user-editable": False, "set-causes-reset": False, "type": "message-id", },
+            "chat_disabled":    { "default": False,  "user-editable": False, "set-causes-reset": False, "type": "bool", },
+            "chat_roles":       { "default": [],     "user-editable": False, "set-causes-reset": False, "type": "list-of:role-id", },
+            "do_users_pin":     { "default": True,   "user-editable": True,  "set-causes-reset": False, "type": "bool", },
+            "do_join_part":     { "default": True,   "user-editable": True,  "set-causes-reset": False, "type": "bool", },
+            "do_echo_self":     { "default": False,  "user-editable": True,  "set-causes-reset": False, "type": "bool", },
     }
 
     emoji_map = {
@@ -497,7 +497,7 @@ class BotNetVL:
                         botnet_account = channel_state.account_relay
                         if not botnet_account is None:
                             for bot_id, user in self.state.users.items():
-                                if user.is_on_account() and user.account == botnet_account:
+                                if user.is_on_account() and user.account.lower() == botnet_account.lower():
                                     to_send = self.handle_discord_message(message, \
                                             length = 220, \
                                             out_prefix = "CHAT {} ".format(message.author.id), \
@@ -788,31 +788,36 @@ class BotNetVL:
                 # or if LIST, all BotNet users were updated and affects all feeds
                 if user is None or \
                             (user.is_on_account() and \
-                             channel_state.account_relay == user.account):
+                             channel_state.account_relay.lower() == user.account.lower()):
 
                     channel = self.bot.get_channel(channel_id)
                     if channel:
                         # check if this BNCS channel state has a null account object
-                        user_obj = user
-                        if user_obj is None:
-                            # find this account in "LIST"
-                            for bot_id, user_item in self.state.users.items():
-                                if user_item.is_on_account() and \
-                                        channel_state.account_relay == user_item.account:
-                                    user_obj = user_item
-                                    break
+                        relay = self.botnet_get_relay_account(channel, channel_state, user, action)
+                        if not relay is channel_state.account_relay_object:
+                            channel_state.account_relay_object = relay
 
-                        if user_obj is None or action == "PART":
-                            # this BNCS channel state doesn't belong to an online BotNet user
-                            #print("BotNet WARNING: User account {} is not online for channel {}.".format(channel_state.account_relay, channel.mention))
-                            user_obj = None
+                            # post BNCS userlist if change
+                            coro = self.post_userlist(channel, channel_state)
+                            self.tasks.append(self.bot.loop.create_task(coro))
 
-                        # save this (REFERENCE) in channel state
-                        channel_state.account_relay_object = user_obj
+    def botnet_get_relay_account(self, channel, channel_state, user, action):
+        """Gets what the account_relay_object on a channel_state should reference, from a given BotNet join/part event."""
+        if user is None:
+            # find this account in "LIST"
+            for bot_id, user_item in self.state.users.items():
+                if user_item.is_on_account() and \
+                        channel_state.account_relay.lower() == user_item.account.lower():
+                    user = user_item
+                    break
 
-                        # post BNCS userlist
-                        coro = self.post_userlist(channel, channel_state)
-                        self.tasks.append(self.bot.loop.create_task(coro))
+        if user is None or action == "PART":
+            # this BNCS channel state doesn't belong to an online BotNet user
+            #print("BotNet WARNING: User account {} is not online for channel {}.".format(channel_state.account_relay, channel.mention))
+            user = None
+
+        # save this (REFERENCE) in channel state
+        return user
 
     def botnet_on_chat(self, user, message, command, action):
         """Event that occurs when chat is received."""
@@ -931,11 +936,11 @@ class BotNetVL:
         try:
             if channel_state is None:
                 if action["type"] == "request_status":
-                    status = [ "ERROR", 0, ""]
+                    status = [ "ERROR", "0", ""]
                     try:
                         # tell BotNet user about status
                         if not botnet_user.is_on_account():
-                            status[1] = 2
+                            status[1] = "2"
                             status[2] = "You must be on a BotNet account."
                         else:
                             # find this account's "first" feed and store it
@@ -951,17 +956,17 @@ class BotNetVL:
 
                             if first_feed is None:
                                 # error: no feeds are setup for that account
-                                status[1] = 1
+                                status[1] = "1"
                                 status[2] = "There are no feeds expecting that account."
                             else:
                                 channel = self.bot.get_channel(first_channel_id)
                                 if   not channel:
                                     # error: inaccessible Discord channel
-                                    status[1] = 3
+                                    status[1] = "3"
                                     status[2] = "Discord channel inaccessible."
                                 elif not isinstance(channel, discord.TextChannel):
                                     # error: Discord channel is of wrong type
-                                    status[1] = 4
+                                    status[1] = "4"
                                     status[2] = "Discord channel not a TextChannel."
                                 else:
                                     # successfully gathered status
@@ -973,7 +978,7 @@ class BotNetVL:
                                     status[2] = channel.guild.name
                     except Exception as ex:
                         status[0] = "ERROR"
-                        status[1] = 0
+                        status[1] = "0"
                         status[2] = "An exception occured."
 
                     # send compiled status
@@ -1501,6 +1506,16 @@ class BotNetVL:
         # save channel state to self
         self.channel_states[channel.id] = channel_state
 
+        # send RESET to this account, if online and account_relay_object is incorrect
+        relay = self.botnet_get_relay_account(channel, channel_state, None, "RESET")
+        if not relay is channel_state.account_relay_object:
+            channel_state.account_relay_object = relay
+            if relay:
+                reset_str = "RESET"
+                print("{} -> {}".format(relay.account, reset_str))
+                to_send = [self.send_chat(reset_str, whisper_to = relay.bot_id)]
+                await self.send_resp(to_send)
+
         try:
             if self.state.hub_automirror:
                 hub_guild = self.bot.get_guild(self.state.hub_guild)
@@ -1609,13 +1624,24 @@ class BotNetVL:
             if is_changing:
                 key = key_matches[0]
                 conf_set = BotNetVL.channel_conf[key]
-                if not conf_set["bncsset-edit"]:
+                if not conf_set["user-editable"]:
                     await ctx.send(content="You may not set the feed setting called {}.".format(self.escape_text(key)))
                     return
                 val = self.parse_conf_value(ctx, val, conf_set["type"])
                 data = {key: str(val)}
                 await self.config.channel(channel).get_attr(key).set(val)
-                setattr(self.channel_states[channel.id], key, val)
+                channel_state = self.channel_states[channel.id]
+                setattr(channel_state, key, val)
+                if conf_set["set-causes-reset"]:
+                    # send RESET to this account, if online and account_relay_object is incorrect
+                    relay = self.botnet_get_relay_account(channel, channel_state, None, "RESET")
+                    if not relay is channel_state.account_relay_object:
+                        channel_state.account_relay_object = relay
+                        if relay:
+                            reset_str = "RESET"
+                            print("{} -> {}".format(relay.account, reset_str))
+                            to_send = [self.send_chat(reset_str, whisper_to = relay.bot_id)]
+                            await self.send_resp(to_send)
             else:
                 data = {}
                 for key in key_matches:
