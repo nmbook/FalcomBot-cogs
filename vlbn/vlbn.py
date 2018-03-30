@@ -264,7 +264,7 @@ class BotNetVL:
                 if len(self.state.deferred_chat) > 0:
                     for command, action, bot_id, message in self.state.deferred_chat:
                         self.botnet_on_chat(self.state.users[bot_id], message, command, action)
-                    self.state.deferred_chat = []
+                    del self.state.deferred_chat[:]
             else:
                 account      = None
                 database     = None
@@ -999,7 +999,7 @@ class BotNetVL:
                     # enter channel
                     # clear our wc user list
                     # let the BotNet update change pin
-                    channel_state.users = []
+                    del channel_state.users[:]
                     channel_state.join_counter = 0
                     channel_state.userlist_dirty = False
             elif cmd == "URL":
@@ -1359,7 +1359,7 @@ class BotNetVL:
         """Cancels all pending tasks and reconnects to BotNet."""
         for task in self.tasks:
             task.cancel()
-        self.tasks = []
+        del self.tasks[:]
         coro = self.botnet_main()
         self.tasks.append(self.bot.loop.create_task(coro))
 
