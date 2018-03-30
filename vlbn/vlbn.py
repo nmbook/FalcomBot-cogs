@@ -117,37 +117,29 @@ class BotNetVL:
         self.channel_states = {}
 
         # store states
-        self.state.server               = await self.config.server()
-        self.state.port                 = await self.config.port()
-        self.state.bot_name             = await self.config.bot_name()
-        self.state.bot_pass             = await self.config.bot_pass()
-        self.state.database_name        = await self.config.database_name()
-        self.state.database_pass        = await self.config.database_pass()
-        self.state.account_name         = await self.config.account_name()
-        self.state.account_pass         = await self.config.account_pass()
-        self.hub_guild                  = await self.config.hub_guild()
-        self.hub_category               = await self.config.hub_category()
-        self.hub_automirror             = await self.config.hub_automirror()
+        try:
+            for key, val in BotNetVL.global_conf.items():
+                setattr(self.state, key, await self.config.get_attr(key)())
 
-        # store channel states
-        channel_conf = await self.config.all_channels()
-        for channel_id, conf in channel_conf.items():
-            channel_state = BotNetVLChannelState(conf)
-            if channel_state.feed_type != "none":
-                self.channel_states[channel_id] = channel_state
+            # store channel states
+            channel_conf = await self.config.all_channels()
+            for channel_id, conf in channel_conf.items():
+                channel_state = BotNetVLChannelState()
+                for key, val in BotNetVL.channel_conf.items():
+                    setattr(channel_state, key, conf[key])
+
+                if channel_state.feed_type != "none":
+                    self.channel_states[channel_id] = channel_state
+        except Exception as ex:
+            print("BotNet EXCEPTION: {}".format(ex))
 
     async def save_channel_config(self, channel, channel_state):
         """Saves the setting-level properties of the given channel state."""
-        await self.config.channel(channel).guild        .set(channel_state.guild)
-        await self.config.channel(channel).channel_cb   .set(channel_state.channel_cb)
-        await self.config.channel(channel).feed_type    .set(channel_state.feed_type)
-        await self.config.channel(channel).account_relay.set(channel_state.account_relay)
-        await self.config.channel(channel).users_pin    .set(channel_state.users_pin)
-        await self.config.channel(channel).chat_disabled.set(channel_state.chat_disabled)
-        await self.config.channel(channel).chat_roles   .set(channel_state.chat_roles.copy())
-        await self.config.channel(channel).do_users_pin .set(channel_state.do_users_pin)
-        await self.config.channel(channel).do_join_part .set(channel_state.do_join_part)
-        await self.config.channel(channel).do_echo_self .set(channel_state.do_echo_self)
+        try:
+            for key, val in BotNetVL.channel_conf.items():
+                await self.config.channel(channel).get_attr(key).set(getattr(channel_state, key, val["default"]))
+        except Exception as ex:
+            print("BotNet EXCEPTION: {}".format(ex))
 
     async def botnet_main(self):
         """Initialize self.state and then connect to BotNet.
@@ -1377,10 +1369,8 @@ class BotNetVL:
             await ctx.send(content=error("A channel feed is already present in that channel."))
             return
 
-        # load a default channel object
-        data = await self.config.channel(channel).all()
         # set values
-        channel_state = BotNetVLChannelState(data)
+        channel_state = BotNetVLChannelState()
         channel_state.guild         = channel.guild.id
         channel_state.feed_type     = "botnet"
         # save channel config
@@ -1399,7 +1389,7 @@ class BotNetVL:
                         mirror_channel = await hub_guild.create_text_channel(channel.name, reason="Mirror of #{} on {}".format(name, channel.guild.name))
 
                     # set values
-                    channel_state = BotNetVLChannelState(data)
+                    channel_state = BotNetVLChannelState()
                     channel_state.guild         = mirror_channel.guild.id
                     channel_state.channel_cb    = channel.id
                     channel_state.feed_type     = "botnet"
@@ -1431,10 +1421,8 @@ class BotNetVL:
             await ctx.send(content=error("A channel feed is already present in that channel."))
             return
 
-        # load a default channel object
-        data = await self.config.channel(channel).all()
         # set values
-        channel_state = BotNetVLChannelState(data)
+        channel_state = BotNetVLChannelState()
         channel_state.guild         = channel.guild.id
         channel_state.feed_type     = "bncs"
         channel_state.account_relay = account_name
@@ -1454,7 +1442,7 @@ class BotNetVL:
                         mirror_channel = await hub_guild.create_text_channel(channel.name, reason="Mirror of #{} on {}".format(name, channel.guild.name))
 
                     # set values
-                    channel_state = BotNetVLChannelState(data)
+                    channel_state = BotNetVLChannelState()
                     channel_state.guild         = mirror_channel.guild.id
                     channel_state.channel_cb    = channel.id
                     channel_state.feed_type     = "bncs"
@@ -1570,18 +1558,8 @@ class BotNetVLState():
     """Current state object."""
     def __init__(self):
         # config mirror
-        self.server                 = ""
-        self.port                   = 0x5555
-        self.bot_name               = ""
-        self.bot_pass               = ""
-        self.database_name          = ""
-        self.database_pass          = ""
-        self.account_name           = ""
-        self.account_pass           = ""
-        
-        self.hub_guild              = 0
-        self.hub_category           = 0
-        self.hub_automirror         = False
+        for key, val in BotNetVL.global_conf.items():
+            setattr(self, key, val)
 
         # connection state
         self.socket                 = None
@@ -1604,18 +1582,10 @@ class BotNetVLState():
         return "<BotNet state object connected as {}>".format(self.self_user)
 
 class BotNetVLChannelState():
-    def __init__(self, config_dict):
+    def __init__(self):
         # config mirror
-        self.guild                  = config_dict["guild"]
-        self.channel_cb             = config_dict["channel_cb"]
-        self.feed_type              = config_dict["feed_type"]
-        self.account_relay          = config_dict["account_relay"]
-        self.users_pin              = config_dict["users_pin"]
-        self.chat_disabled          = config_dict["chat_disabled"]
-        self.chat_roles             = config_dict["chat_roles"].copy()
-        self.do_users_pin           = config_dict["do_users_pin"]
-        self.do_join_part           = config_dict["do_join_part"]
-        self.do_echo_self           = config_dict["do_echo_self"]
+        for key, val in BotNetVL.channel_conf.items():
+            setattr(self, key, val["default"])
 
         # BNCS channel state
         self.account_relay_object   = None
