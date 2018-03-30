@@ -632,13 +632,19 @@ class BotNetVL:
                         except Exception as ex:
                             print("BotNet EXCEPTION updating a userlist: {}".format(ex))
 
-    async def post_joinpart(self, channel, channel_state, user, action):
+    async def post_joinpart(self, channel, channel_state, user, action, *, time = None):
         """Posts a join/part alert to the given channel for the given user."""
         if self.state.chat_ready:
             if not channel_state is None:
                 if channel_state.do_join_part:
-                    timestamp = datetime.utcnow().strftime("%H:%M:%S")
                     try:
+                        if time:
+                            dt = datetime.utcnow()
+                            dt = datetime(dt.year, dt.month, dt.day, tzinfo=dt.tzinfo)
+                            dt += timedelta(seconds=time)
+                        else:
+                            dt = datetime.utcnow()
+                        timestamp = dt.strftime("%H:%M:%S")
                         if channel_state.feed_type == "botnet":
                             if user.database != self.state.self_user.database:
                                 # ignore other databases
@@ -972,11 +978,11 @@ class BotNetVL:
                     if not user_obj is None:
                         if evid == 0x02:
                             # post BotNet join/part alert
-                            coro = self.post_joinpart(channel, channel_state, user_obj, "JOIN")
+                            coro = self.post_joinpart(channel, channel_state, user_obj, "JOIN", time = evtm)
                             self.tasks.append(self.bot.loop.create_task(coro))
                         elif evid == 0x03:
                             # post BotNet join/part alert
-                            coro = self.post_joinpart(channel, channel_state, user_obj, "PART")
+                            coro = self.post_joinpart(channel, channel_state, user_obj, "PART", time = evtm)
                             self.tasks.append(self.bot.loop.create_task(coro))
 
                     # decide how to dispatch
