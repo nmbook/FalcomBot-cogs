@@ -9,6 +9,7 @@ import concurrent.futures
 import fnmatch
 import itertools
 import math
+import pytz
 import socket
 import struct
 import traceback
@@ -38,16 +39,37 @@ class BotNetVL:
     }
 
     channel_conf = {
-            "guild":            { "default": 0,      "user-editable": False, "set-causes-reset": False, "type": "guild-id", },
-            "channel_cb":       { "default": 0,      "user-editable": False, "set-causes-reset": False, "type": "channel-id", },
-            "feed_type":        { "default": "none", "user-editable": False, "set-causes-reset": False, "type": "one-of:none,botnet,bncs", },
-            "account_relay":    { "default": None,   "user-editable": True,  "set-causes-reset": True,  "type": "str", },
-            "users_pin":        { "default": 0,      "user-editable": False, "set-causes-reset": False, "type": "message-id", },
-            "chat_disabled":    { "default": False,  "user-editable": False, "set-causes-reset": False, "type": "bool", },
-            "chat_roles":       { "default": [],     "user-editable": False, "set-causes-reset": False, "type": "list-of:role-id", },
-            "do_users_pin":     { "default": True,   "user-editable": True,  "set-causes-reset": False, "type": "bool", },
-            "do_join_part":     { "default": True,   "user-editable": True,  "set-causes-reset": False, "type": "bool", },
-            "do_echo_self":     { "default": False,  "user-editable": True,  "set-causes-reset": False, "type": "bool", },
+            "guild":                { "default": 0,      "user-editable": False, "type": "guild-id", },
+            "channel_cb":           { "default": 0,      "user-editable": False, "type": "channel-id", },
+            "feed_type":            { "default": "none", "user-editable": False, "type": "one-of:none,botnet,bncs", },
+            "account_relay":        { "default": None,   "user-editable": True,  "set-causes-reset": True, "type": "str", },
+            "users_pin":            { "default": 0,      "user-editable": False, "type": "message-id", },
+            "chat_disabled":        { "default": False,  "user-editable": False, "type": "bool", },
+            "chat_roles":           { "default": [],     "user-editable": False, "type": "list-of:role-id", },
+            "do_users_pin":         { "default": True,   "user-editable": True,  "set-updates-users": True, "type": "bool", },
+            "do_join_part":         { "default": True,   "user-editable": True,  "type": "bool", },
+            "do_echo_self":         { "default": False,  "user-editable": True,  "type": "bool", },
+            "post_format":          { "default": "`{timestamp:%H:%M:%S}` {post}", "user-editable": True, "type": "str:format", },
+            "join_format":          { "default": "{prod_icon}{name} *{ping:,}ms* has joined.",
+                "user-editable": True, "type": "str:format", },
+            "part_format":          { "default": "{name} has left.",
+                "user-editable": True, "type": "str:format", },
+            "chat_format":          { "default": "<{hl}{name}{hl_end}> {text}",
+                "user-editable": True, "type": "str:format", },
+            "emote_format":         { "default": "<{hl}{name}{hl_end} {text}>",
+                "user-editable": True, "type": "str:format", },
+            "bot_alert_format":     { "default": "__**{INFO_TYPE}**__ <{hl}{name}{hl_end}> {text}",
+                "user-editable": True, "type": "str:format", },
+            "server_alert_format":  { "default": "__**SERVER {INFO_TYPE}**__ {text}",
+                "user-editable": True, "type": "str:format", },
+            "users_list_format":    { "default": "__**Users in {channel}{server_icon} ({count})**__\n\n{list}",
+                "user-editable": True, "set-updates-users": True, "type": "str:format", },
+            "users_item_format":    { "default": "{prod_list_icon}{hl}{name}{hl_end} *{ping:,}ms*",
+                "user-editable": True, "set-updates-users": True, "type": "str:format", },
+            "hl_norm_format":       { "default": "",    "user-editable": True, "set-updates-users": True, "type": "str:format", },
+            "hl_self_format":       { "default": "",    "user-editable": True, "set-updates-users": True, "type": "str:format", },
+            "hl_oper_format":       { "default": "**",  "user-editable": True, "set-updates-users": True, "type": "str:format", },
+            "timezone":             { "default": "UTC", "user-editable": True, "set-updates-timezone": True, "set-updates-users": True, "type": "str:timezone", },
     }
 
     emoji_map = {
@@ -90,6 +112,65 @@ class BotNetVL:
     }
 
 
+    product_map = {
+            "CHAT": { "name": "Chat" },
+            "DRTL": { "name": "Diablo" },
+            "DSHR": { "name": "Diablo Shareware" },
+            "SSHR": { "name": "StarCraft Shareware" },
+            "JSTR": { "name": "StarCraft Japanese" },
+            "STAR": { "name": "StarCraft" },
+            "SEXP": { "name": "StarCraft: Brood War" },
+            "W2BN": { "name": "Warcraft II: Battle.net Edition" },
+            "D2DV": { "name": "Diablo II" },
+            "D2XP": { "name": "Diablo II: Lord of Destruction" },
+            "WAR3": { "name": "Warcraft III: Reign of Chaos" },
+            "W3XP": { "name": "Warcraft III: The Frozen Throne" },
+            ""    : { "name": "Unset" },
+    }
+    
+    d1_stats_char_list   = ["Warrior", "Rogue", "Sorcerer"]
+    d2_stats_char_list   = ["Amazon", "Sorceress", "Necromancer", "Paladin", "Barbarian", "Druid", "Assassin"]
+    d2_stats_char_female = [True,     True,        False,         False,     False,       False,   True      ]
+    d2_stats_title_table = {
+            # diff, xp,    hc,    fem
+            # diff = 0: none defeated
+            (0,     False, False, False) : "",
+            (0,     False, False, True ) : "",
+            (0,     False, True , False) : "",
+            (0,     False, True , True ) : "",
+            (0,     True , False, False) : "",
+            (0,     True , False, True ) : "",
+            (0,     True , True , False) : "",
+            (0,     True , True , True ) : "",
+            # diff = 1: normal defeated
+            (1,     False, False, False) : "Sir",
+            (1,     False, False, True ) : "Dame",
+            (1,     False, True , False) : "Count",
+            (1,     False, True , True ) : "Countess",
+            (1,     True , False, False) : "Slayer",
+            (1,     True , False, True ) : "Slayer",
+            (1,     True , True , False) : "Destroyer",
+            (1,     True , True , True ) : "Destroyer",
+            # diff = 2: nightmare defeated
+            (2,     False, False, False) : "Lord",
+            (2,     False, False, True ) : "Lady",
+            (2,     False, True , False) : "Duke",
+            (2,     False, True , True ) : "Duchess",
+            (2,     True , False, False) : "Champion",
+            (2,     True , False, True ) : "Champion",
+            (2,     True , True , False) : "Conquerer",
+            (2,     True , True , True ) : "Conquerer",
+            # diff = 3: hell defeated
+            (3,     False, False, False) : "Baron",
+            (3,     False, False, True ) : "Baroness",
+            (3,     False, True , False) : "King",
+            (3,     False, True , True ) : "Queen",
+            (3,     True , False, False) : "Patriarch",
+            (3,     True , False, True ) : "Matriarch",
+            (3,     True , True , False) : "Guardian",
+            (3,     True , True , True ) : "Guardian",
+    }
+
     def __init__(self, bot):
         self.bot = bot
 
@@ -127,6 +208,11 @@ class BotNetVL:
                 channel_state = BotNetVLChannelState()
                 for key, val in BotNetVL.channel_conf.items():
                     setattr(channel_state, key, conf[key])
+
+                try:
+                    channel_state.timezone_object = pytz.timezone(channel_state.timezone.replace(" ", "_"))
+                except pytz.exceptions.UnknownTimeZoneError:
+                    channel_state.timezone_object = pytz.utc
 
                 if channel_state.feed_type != "none":
                     self.channel_states[channel_id] = channel_state
@@ -538,9 +624,16 @@ class BotNetVL:
         if self.state.chat_ready:
             if not channel_state is None:
                 if channel_state.do_users_pin:
+                    if channel_state.userlist_update_lock:
+                        print("Waiting to update pin.")
+                        return
+
+                    channel_state.userlist_update_lock = True
+
                     # find message object if stored
                     if channel_state.users_pin == 0:
                         #print("Pin not set!")
+                        print("Not set reason: not in config")
                         to_create = True
                     else:
                         try:
@@ -548,6 +641,7 @@ class BotNetVL:
                             if post.author.id != self.bot.user.id:
                                 # not ours...
                                 #print("Pin not owned!")
+                                print("Not set reason: not owned")
                                 to_create = True
 
                             to_create = False
@@ -555,134 +649,158 @@ class BotNetVL:
                             # message was deleted
                             #print("Pin not found!")
                             to_create = True
+                            print("Not set reason: discord says NotFound")
                         except discord.Forbidden:
-                            #print("Pin inaccessible!")
+                            print("Pin inaccessible!")
                             to_create = False
+                            channel_state.userlist_update_lock = False
                             return
                         except Exception as ex:
                             # named but not accessible or something
                             print("BotNet EXCEPTION finding a stored pin ID: {}".format(ex))
                             to_create = False
+                            channel_state.userlist_update_lock = False
                             return
 
                     # generate text for this message to be pinned
-                    text = None
                     if   channel_state.feed_type == "botnet":
                         text = self.handle_botnet_userlist(channel_state.users)
                     elif channel_state.feed_type == "bncs":
-                        text = self.handle_webchannel_bncs_userlist(channel_state.account_relay_object, channel_state.users)
-
-                    if text is None:
-                        print("BotNet WARNING: Unknown feed type userlist being pinned.")
+                        text = self.handle_webchannel_bncs_userlist(channel_state, channel_state.account_relay_object, channel_state.users)
+                    else:
+                        print("BotNet WARNING: Unknown feed type userlist being pinned: {}".format(channel_state.feed_type))
                         return
+
+                    if not to_create:
+                        # updating a pinned post
+                        #print("UPDATING EXISTING USERLIST")
+                        try:
+                            if post.content != text:
+                                await post.edit(content=text)
+
+                            if not post.pinned:
+                                # not pinned
+                                try:
+                                    print("PIN REASON: NOT CURRENTLY PINNED")
+                                    await post.pin()
+                                except discord.Forbidden:
+                                    # pin failed
+                                    print("Pinning forbidden!")
+                                    pass
+                                except discord.NotFound:
+                                    # pin missing
+                                    print("Message gone!")
+                                    return
+                                except Exception as ex:
+                                    print("BotNet EXCEPTION pinning a userlist: {}".format(ex))
+                                    return
+                        except discord.NotFound:
+                            # pin missing
+                            print("Message gone!")
+                            to_create = True
+                        except discord.Forbidden:
+                            # edit failed
+                            print("Editing forbidden!")
+                            pass
+                        except Exception as ex:
+                            print("BotNet EXCEPTION updating a userlist: {}".format(ex))
+                        finally:
+                            channel_state.userlist_update_lock = False
 
                     # create or update the post
                     if to_create:
                         # creating and pinning post
-                        post = None
                         try:
+                            print("POSTING USERLIST")
                             post = await channel.send(content=text)
                         except discord.Forbidden:
                             # write failed
-                            #print("Message write forbidden!")
+                            print("Message write forbidden!")
                             return
                         except discord.NotFound:
                             # write failed
-                            #print("Message write not allowed to inaccessible channel!")
+                            print("Message write not allowed to inaccessible channel!")
                             return
                         except Exception as ex:
                             print("BotNet EXCEPTION posting a userlist: {}".format(ex))
+                            return
+                        finally:
+                            channel_state.userlist_update_lock = False
+
                         try:
+                            print("PIN REASON: POST CREATION")
                             await post.pin()
                         except discord.Forbidden:
                             # pin failed
-                            #print("Pinning forbidden!")
+                            print("Pinning forbidden!")
                             pass
                         except discord.NotFound:
                             # pin missing
-                            #print("Message gone!")
+                            print("Late! Message gone!")
                             return
                         except Exception as ex:
                             print("BotNet EXCEPTION pinning a userlist: {}".format(ex))
+
                         try:
                             channel_state.users_pin = post.id
                             await self.save_channel_config(channel, channel_state)
                         except Exception as ex:
                             print("BotNet EXCEPTION saving a userlist: {}".format(ex))
 
-                    else:
-                        # updating a pinned post
-                        if not post.pinned:
-                            # not pinned
-                            try:
-                                await post.pin()
-                            except discord.Forbidden:
-                                # pin failed
-                                #print("Pinning forbidden!")
-                                pass
-                            except discord.NotFound:
-                                # pin missing
-                                #print("Message gone!")
-                                return
-                            except Exception as ex:
-                                print("BotNet EXCEPTION pinning a userlist: {}".format(ex))
-                        try:
-                            if post.content != text:
-                                await post.edit(content=text)
-                        except Exception as ex:
-                            print("BotNet EXCEPTION updating a userlist: {}".format(ex))
-
     async def post_joinpart(self, channel, channel_state, user, action, *, time = None):
         """Posts a join/part alert to the given channel for the given user."""
         if self.state.chat_ready:
             if not channel_state is None:
                 if channel_state.do_join_part:
-                    try:
-                        if time:
-                            dt = datetime.utcnow()
-                            dt = datetime(dt.year, dt.month, dt.day, tzinfo=dt.tzinfo)
-                            dt += timedelta(seconds=time)
+                    dt, dt_aware = self.parse_time_value(channel_state, time)
+                    if channel_state.feed_type == "botnet":
+                        if user.database != self.state.self_user.database:
+                            # ignore other databases
+                            return
+                        
+                        bnet_inf = self.handle_botnet_user(user)
+                        if   action == "JOIN":
+                            action = "connected to"
+                        elif action == "PART":
+                            action = "disconnected from"
                         else:
-                            dt = datetime.utcnow()
-                        timestamp = dt.strftime("%H:%M:%S")
-                        if channel_state.feed_type == "botnet":
-                            if user.database != self.state.self_user.database:
-                                # ignore other databases
-                                return
-                            
-                            bnet_inf = self.handle_botnet_user(user)
-                            if   action == "JOIN":
-                                action = "connected to"
-                            elif action == "PART":
-                                action = "disconnected from"
-                            else:
-                                # ignore user updates and lists
-                                return
+                            # ignore user updates and lists
+                            return
 
-                            text = "`{time}` #{num}: {user} *{act} {database}.*".format( \
-                                    time = timestamp, \
-                                    num = user.str_bot_id(), \
-                                    user = bnet_inf, \
-                                    act = action, \
-                                    database = user.database)
-                        elif channel_state.feed_type == "bncs":
-                            bnet_inf = self.handle_webchannel_bncs_user(user)
-                            if   action == "JOIN":
-                                action = "joined"
-                            elif action == "PART":
-                                action = "left"
-                            else:
-                                # ignore user updates and lists
-                                return
+                        text = "#{id}: {name} {action} {database}.".format( \
+                                id = user.str_bot_id(), \
+                                name = bnet_inf, \
+                                action = action, \
+                                database = user.database)
+                    elif channel_state.feed_type == "bncs":
+                        args = self.get_webchannel_bncs_users_item_format_args(channel_state, user)
+                        args = {**args, **self.get_webchannel_bncs_users_list_format_args(channel_state, channel_state.account_relay_object)}
+                        if   action == "JOIN":
+                            args["action"] = "joined"
+                            text = self.safe_format(channel_state.join_format,
+                                    BotNetVL.channel_conf["join_format"]["default"], **args)
+                        elif action == "PART":
+                            args["action"] = "left"
+                            text = self.safe_format(channel_state.part_format,
+                                    BotNetVL.channel_conf["part_format"]["default"], **args)
+                        else:
+                            # ignore user updates and lists
+                            return
 
-                            text = "`{time}` {user} *has {act}.*".format( \
-                                    time = timestamp, \
-                                    user = bnet_inf, \
-                                    act = action, \
-                                    channel = self.escape_text(channel_state.account_relay_object.bnet_channel), \
-                                    server = self.emoji_name(self.address_friendlyname(channel_state.account_relay_object.bnet_server)))
-
-                        await channel.send(content=text)
+                    try:
+                        await channel.send(content=self.safe_format(channel_state.post_format,
+                                BotNetVL.channel_conf["post_format"]["default"],
+                                timestamp = dt_aware,
+                                timestamp_utc = dt,
+                                post = text))
+                    except discord.Forbidden:
+                        # write failed
+                        #print("Message write forbidden!")
+                        return
+                    except discord.NotFound:
+                        # write failed
+                        #print("Message write not allowed to inaccessible channel!")
+                        return
                     except Exception as ex:
                         print("BotNet EXCEPTION posting join/part alert: {}".format(ex))
 
@@ -690,58 +808,82 @@ class BotNetVL:
         """Posts a remote message to a feed channel."""
         if self.state.chat_ready:
             if not channel_state is None:
+                dt, dt_aware = self.parse_time_value(channel_state, time)
+
+                if not user is None:
+                    s = ""
+                    if user.is_self:
+                        s += channel_state.hl_self_format
+                    if user.is_priority():
+                        s += channel_state.hl_oper_format
+                    if not channel_state.hl_norm_format in s:
+                        s += channel_state.hl_norm_format
+                else:
+                    s = ""
+                args = {
+                        "hl"                : s, \
+                        "hl_end"            : s[::-1], \
+                        "name"              : self.escape_text(str(user)), \
+                        "text"              : self.escape_text(text), \
+                        }
+                if broadcast:
+                    args["info_type"] = "broadcast"
+                    args["action"] = "bot_alert"
+                elif info:
+                    args["info_type"] = "info"
+                    args["action"] = "bot_alert"
+                elif error:
+                    args["info_type"] = "error"
+                    args["action"] = "bot_alert"
+                elif emote:
+                    args["info_type"] = "emote"
+                    args["action"] = "emote"
+                else:
+                    args["info_type"] = "chat"
+                    args["action"] = "chat"
+                args["INFO_TYPE"] = args["info_type"].upper()
+                args["NAME"] = args["name"].upper()
+
+                if user is None or (no_user and user.is_self) or len(str(user)) == 0:
+                    # special "server alert" mode
+                    if args["action"] == "bot_alert":
+                        args["action"] = "server_alert"
+                    else:
+                        args["action"] = "raw"
+
+                if   args["action"] == "chat":
+                    text = self.safe_format(channel_state.chat_format,
+                            BotNetVL.channel_conf["chat_format"]["default"], **args)
+                elif args["action"] == "emote":
+                    text = self.safe_format(channel_state.emote_format,
+                            BotNetVL.channel_conf["emote_format"]["default"], **args)
+                elif args["action"] == "bot_alert":
+                    text = self.safe_format(channel_state.bot_alert_format,
+                            BotNetVL.channel_conf["bot_alert_format"]["default"], **args)
+                elif args["action"] == "server_alert":
+                    text = self.safe_format(channel_state.server_alert_format,
+                            BotNetVL.channel_conf["server_alert_format"]["default"], **args)
+                elif args["action"] == "raw":
+                    # raw text = text
+                    pass
+
                 try:
-                    if time:
-                        dt = datetime.utcnow()
-                        dt = datetime(dt.year, dt.month, dt.day, tzinfo=dt.tzinfo)
-                        dt += timedelta(seconds=time)
-                    else:
-                        dt = datetime.utcnow()
-                    timestamp = dt.strftime("%H:%M:%S")
-                    if broadcast:
-                        bctext = "__**{}BROADCAST**__ "
-                    elif info:
-                        bctext = "__**{}INFO**__ "
-                    elif error:
-                        bctext = "__**{}ERROR**__ "
-                    else:
-                        bctext = ""
-                    if emote:
-                        ec0 = "<"
-                        ec1 = " "
-                        ec2 = ">"
-                    else:
-                        ec0 = "<"
-                        ec1 = "> "
-                        ec2 = ""
-                    u = ""
-                    if not user is None:
-                        if user.is_self:
-                            u += "__"
-                        if user.is_priority():
-                            u += "**"
-                    if user is None or (no_user and user.is_self) or len(str(user)) == 0:
-                        if len(bctext) > 0:
-                            bctext = bctext.format("SERVER ")
-                        u = ""
-                        name = ""
-                        ec0 = ""
-                        ec1 = ""
-                        ec2 = ""
-                    else:
-                        if len(bctext) > 0:
-                            bctext = bctext.format("")
-                        name = str(user)
-                    urev = u[::-1]
-                    text = "`{time}` {pref}{ec0}{u}{name}{urev}{ec1}{text}{ec2}".format( \
-                            time = timestamp, \
-                            pref = bctext, \
-                            name = self.escape_text(name), \
-                            text = self.escape_text(text), \
-                            ec0 = ec0, ec1 = ec1, ec2 = ec2, u = u, urev = urev)
-                    await channel.send(content=text)
+                    await channel.send(content=self.safe_format(channel_state.post_format,
+                            BotNetVL.channel_conf["post_format"]["default"],
+                            timestamp = dt_aware,
+                            timestamp_utc = dt,
+                            post = text))
+                except discord.Forbidden:
+                    # write failed
+                    #print("Message write forbidden!")
+                    return
+                except discord.NotFound:
+                    # write failed
+                    #print("Message write not allowed to inaccessible channel!")
+                    return
                 except Exception as ex:
                     print("BotNet EXCEPTION posting chat: {}".format(ex))
+                    traceback.print_exc()
 
     def botnet_on_userlist(self, users):
         """Event that occurs when userlist is received."""
@@ -1001,6 +1143,9 @@ class BotNetVL:
                     await self.post_chat(channel, channel_state, **action["args"])
 
                 elif action["type"] == "event_chat":
+                    if action["event"]["id"] == 0x00 and not channel_state.do_echo_self:
+                        return
+
                     # find user in user list
                     user_obj = None
                     for user in channel_state.users:
@@ -1012,7 +1157,8 @@ class BotNetVL:
                         # make dummy
                         user_obj = BotNetVLWebChannelUser(action["event"]["name"], \
                                 action["event"]["flags"], action["event"]["ping"], \
-                                "", 0, channel_state.account_relay_object.bnet_name == action["event"]["name"])
+                                "", 0,
+                                is_self = channel_state.account_relay_object.bnet_name == action["event"]["name"])
 
                     emote = (action["event"]["id"] == 0x17)
                     broadcast = (action["event"]["id"] == 0x06)
@@ -1045,14 +1191,17 @@ class BotNetVL:
                         channel_state.join_counter += 1
                         user_obj = BotNetVLWebChannelUser(action["event"]["name"], \
                                 action["event"]["flags"], action["event"]["ping"], \
-                                action["event"]["text"], channel_state.join_counter, is_self)
+                                action["event"]["text"], channel_state.join_counter,
+                                is_self = is_self, time = action["event"]["time"])
+                        user_obj.do_parse_text()
                         channel_state.users.append(user_obj)
 
                     elif not user_obj is None: # update/existing user
                         user_obj.flags = action["event"]["flags"]
                         user_obj.ping = action["event"]["ping"]
-                        if len(action["event"]["text"]) > 0:
+                        if len(action["event"]["text"]) > 0 and user_obj.text != action["event"]["text"]:
                             user_obj.text = action["event"]["text"]
+                            user_obj.do_parse_text()
 
                     if not user_obj is None:
                         if action["event"]["id"] == 0x02:
@@ -1103,6 +1252,31 @@ class BotNetVL:
         text = text.replace("`", "\\`")
         text = text.replace("@", "\\@")
         return escape(text, mass_mentions=True)
+
+    def safe_format(self, format_str, default_format_str, **args):
+        """Runs a format attempt and if it fails due to an unknown parameter, run the default format instead."""
+        try:
+            return format_str.format(**args)
+        except KeyError:
+            try:
+                return default_format_str.format(**args)
+            except KeyError:
+                return "*Safe format failed.*"
+
+    def parse_time_value(self, channel_state, time_value):
+        """Takes a timezone object and localizes the given time_value. If time_value is None, assumed to be "now"."""
+        if time_value:
+            dt = datetime.utcnow()
+            dt = datetime(dt.year, dt.month, dt.day, tzinfo=dt.tzinfo)
+            dt += timedelta(seconds=time_value)
+        else:
+            dt = datetime.utcnow()
+        if channel_state:
+            dt_aware = channel_state.timezone_object.localize(dt)
+            dt_aware += channel_state.timezone_object.utcoffset(dt)
+        else:
+            dt_aware = dt
+        return dt, dt_aware
 
     def handle_discord_message(self, message, *, length = 496, in_prefix = "", out_prefix = "", out_suffix = "", whisper_to = 0):
         """Takes a Discord message object and parses the content to be sent to BotNet."""
@@ -1207,7 +1381,7 @@ class BotNetVL:
     def byte_size(self, bytelen):
         """Returns human-friendly file size from a given number of bytes."""
         units = ['bytes', 'kB', 'MB', 'GB', 'TB', 'PB']
-        ind = int(math.log2(bytelen) / 10.0) - 1
+        ind = int(math.log2(bytelen) / 10.0)
         if ind >= len(units):
             ind = len(units) - 1
         if ind > 0:
@@ -1216,7 +1390,7 @@ class BotNetVL:
             val = int(bytelen)
         return "{} {}".format(val, units[ind])
 
-    def handle_webchannel_bncs_userlist(self, user, wc_users):
+    def handle_webchannel_bncs_userlist(self, channel_state, user, wc_users):
         """Creates a textual list of users on BotNet WebChannel (on Battle.net) for use on discord."""
         userlist_fmt = ""
 
@@ -1225,34 +1399,81 @@ class BotNetVL:
 
         userlist = sorted([x for x in wc_users if x]) # sorts by priority
 
-        for wc_user in userlist:
-            bnet_inf = self.handle_webchannel_bncs_user(wc_user)
-            userlist_fmt += "{}\n".format(bnet_inf)
+        list_args = self.get_webchannel_bncs_users_list_format_args(channel_state, user)
+        list_args["count"]  = len(wc_users)
+        list_args["list"]   = ""
+        channel_wrapper = self.safe_format(channel_state.users_list_format,
+                BotNetVL.channel_conf["users_list_format"]["default"], **list_args)
 
-        if len(userlist_fmt) == 0:
+        n = len(userlist)
+        for wc_user in userlist:
+            and_n_more = "*...and {count} more.*".format(count = n)
+            user_args = self.get_webchannel_bncs_users_item_format_args(channel_state, wc_user)
+            bnet_inf = self.safe_format(channel_state.users_item_format,
+                    BotNetVL.channel_conf["users_item_format"]["default"], **user_args)
+            if len(channel_wrapper) + len(userlist_fmt) + len(and_n_more) + len(bnet_inf) + 1 > 2000:
+                # too long, step out now!
+                userlist_fmt += and_n_more
+                break
+            else:
+                # continue adding this item
+                userlist_fmt += "{}\n".format(bnet_inf)
+                n = n - 1
+
+        if len(wc_users) == 0:
             userlist_fmt = "*No users.*"
 
-        return "__**Users in {channel}{server}:**__ ({count})\n\n{list}".format( \
-                channel = self.escape_text(user.bnet_channel), \
-                server = self.emoji_name(self.address_friendlyname(user.bnet_server)), \
-                count = len(wc_users), \
-                list = userlist_fmt)
+        list_args["list"] = userlist_fmt
+        return self.safe_format(channel_state.users_list_format,
+                BotNetVL.channel_conf["users_list_format"]["default"], **list_args)
 
-    def handle_webchannel_bncs_user(self, wc_user):
-        """Converts a BotNet WebChannel (on Battle.net) user object to text form to be displayed on discord."""
+    def get_webchannel_bncs_users_item_format_args(self, channel_state, wc_user):
+        """Converts a BotNet WebChannel (on Battle.net) user item to a set of args to pass to format(channel_state.users_item_format)."""
         s = ""
-        prod = wc_user.get_product()
+        prod = wc_user.product
+        prod_oper = prod
         if wc_user.is_self:
-            s += "__"
+            s += channel_state.hl_self_format
         if wc_user.is_priority():
-            prod = "_oper"
-            s += "**"
-        return "{prod}{s}{name}{revs} *{ping:,}ms*".format( \
-                s = s, \
-                revs = s[::-1], \
-                name = self.escape_text(wc_user.name), \
-                prod = self.emoji_name(prod), \
-                ping = wc_user.ping)
+            prod_oper = "_oper"
+            s += channel_state.hl_oper_format
+        if not channel_state.hl_norm_format in s:
+            s += channel_state.hl_norm_format
+        return {
+                "hl"                : s,
+                "hl_end"            : s[::-1],
+                "name"              : self.escape_text(wc_user.name),
+                "flags"             : wc_user.flags,
+                "ping"              : wc_user.ping,
+                "oper"              : wc_user.is_priority(),
+                "is_self"           : wc_user.is_self,
+                "prod"              : prod,
+                "prod_icon"         : self.emoji_name(prod),
+                "prod_list"         : prod_oper,
+                "prod_list_icon"    : self.emoji_name(prod_oper),
+                "text"              : wc_user.text,
+                "prod_name"         : wc_user.product_name,
+                "text_parsed_1"     : wc_user.text_parsed_1,
+                "text_parsed_2"     : wc_user.text_parsed_2,
+                "text_parsed_3"     : wc_user.text_parsed_3,
+                "tag"               : wc_user.get_value("tag", ""),
+                "Clan_tag"          : wc_user.get_value("Clan_tag", ""),
+                "clan_tag"          : wc_user.get_value("clan_tag", ""),
+                "level"             : wc_user.get_value("level", 0),
+                "level_or_empty"    : str(wc_user.get_value("level", "")),
+                "wins"              : wc_user.get_value("wins", 0),
+                "wins_or_empty"     : str(wc_user.get_value("wins", "")),
+                "char_name"         : wc_user.get_value("char_name", ""),
+                }
+
+    def get_webchannel_bncs_users_list_format_args(self, channel_state, user):
+        """Converts a BotNet WebChannel (on Battle.net) user list to a set of args to pass to format(channel_state.users_list_format)."""
+        return {
+                "channel"           : self.escape_text(user.bnet_channel),
+                "server_address"    : user.bnet_server,
+                "server"            : self.address_friendlyname(user.bnet_server),
+                "server_icon"       : self.emoji_name(self.address_friendlyname(user.bnet_server)),
+                }
 
     def handle_botnet_userlist(self, users):
         """Creates a textual list of users on BotNet for use on discord.
@@ -1353,7 +1574,7 @@ class BotNetVL:
                 # cached
                 return friendly
 
-        return " ({})".format(dotted)
+        return dotted
 
     def address_friendlyname_ignorethis(self, dotted):
         """address_friendlyname() removed code that would do blocking DNS reverse requests... it doesn't seem this would work. We must manually list server IPs in self.resolve_map for now."""
@@ -1381,21 +1602,49 @@ class BotNetVL:
                 mkl = len(k) + 4
         s = ""
         for k, v in data.items():
-            res = str(v)
-            if len(res) > 0 and not ctx.guild is None and k.endswith("pass"):
+            if k.endswith("pass") and len(str(res)) > 0 and not ctx.guild is None:
                 res = "****"
-            if "```" in res or "\n" in res:
-                res = "<unprintable>"
-            s += k.ljust(mkl) + res + "\n"
+            else:
+                res = repr(v)
+            s += "{k}{v}\n".format(k = k.ljust(mkl), v = res)
         return "```\n{}```".format(s)
 
     def escape_code_text(self, text):
         return text.replace("`", "\\`").replace("\n", "\\n")
 
     def parse_conf_value(self, ctx, val, typ):
-        if   typ == "str":
+        if   typ == "str" or typ.startswith("str:"):
             if val.startswith("\"") and val.endswith("\""):
-                return val[1:-1]
+                val = val[1:-1]
+            if val.startswith("'") and val.endswith("'"):
+                val = val[1:-1]
+            val = val.replace("\\n", "\n")
+            val = val.replace("\\r", "")
+            val = val.replace("\\t", "\t")
+            val = val.replace("\\\"", "\"")
+            val = val.replace("\\'", "'")
+            val = val.replace("\\\\", "\\")
+            if typ == "str:timezone":
+                val = val.replace(" ", "_")
+                found = False
+                if not found:
+                    # check for exact match
+                    for timezone in pytz.common_timezones:
+                        if val.lower() == timezone.lower():
+                            val = timezone
+                            found = True
+                            break
+                if not found:
+                    # check for partial match
+                    for timezone in pytz.common_timezones:
+                        if timezone.lower().startswith(val.lower()):
+                            if found:
+                                raise ValueError("Multiple timezones match that name.")
+                            val = timezone
+                            found = True
+                if not found:
+                    raise ValueError("No timezones match that name.")
+                val = val.replace("_", " ")
             return val
         if   typ == "guild-id":
             typ = "int"
@@ -1415,7 +1664,7 @@ class BotNetVL:
             try:
                 return int(val)
             except ValueError:
-                return 0
+                raise
         if   typ == "bool":
             if   val.lower() in ["true", "t", "yes", "y", "on"]:
                 return True
@@ -1424,7 +1673,7 @@ class BotNetVL:
             else:
                 return None
         
-        return str(val)
+        return val
 
     @commands.command(aliases=["bnreconnect", "bnrc"])
     @checks.is_owner()
@@ -1459,9 +1708,9 @@ class BotNetVL:
                 hub_cat = self.bot.get_channel(self.state.hub_category)
                 if hub_guild:
                     if hub_cat:
-                        mirror_channel = await hub_guild.create_text_channel(channel.name, category=hub_cat, reason="Mirror #{} on {}".format(name, channel.guild.name))
+                        mirror_channel = await hub_guild.create_text_channel(channel.name, category=hub_cat, reason="Mirror #{} on {}".format(channel.name, channel.guild.name))
                     else:
-                        mirror_channel = await hub_guild.create_text_channel(channel.name, reason="Mirror of #{} on {}".format(name, channel.guild.name))
+                        mirror_channel = await hub_guild.create_text_channel(channel.name, reason="Mirror of #{} on {}".format(channel.name, channel.guild.name))
 
                     # set values
                     channel_state = BotNetVLChannelState()
@@ -1506,6 +1755,29 @@ class BotNetVL:
         # save channel state to self
         self.channel_states[channel.id] = channel_state
 
+        try:
+            if self.state.hub_automirror:
+                hub_guild = self.bot.get_guild(self.state.hub_guild)
+                hub_cat = self.bot.get_channel(self.state.hub_category)
+                if hub_guild:
+                    if hub_cat:
+                        mirror_channel = await hub_guild.create_text_channel(channel.name, category=hub_cat, reason="Mirror #{} on {}".format(channel.name, channel.guild.name))
+                    else:
+                        mirror_channel = await hub_guild.create_text_channel(channel.name, reason="Mirror of #{} on {}".format(channel.name, channel.guild.name))
+
+                    # set values
+                    hub_channel_state = BotNetVLChannelState()
+                    hub_channel_state.guild         = mirror_channel.guild.id
+                    hub_channel_state.channel_cb    = channel.id
+                    hub_channel_state.feed_type     = "bncs"
+                    hub_channel_state.account_relay = account_name
+                    # save channel config
+                    await self.save_channel_config(mirror_channel, hub_channel_state)
+                    # save channel state to self
+                    self.channel_states[mirror_channel.id] = hub_channel_state
+        except Exception as ex:
+            print("BotNet EXCEPTION creating mirror channel: {}".format(ex))
+
         # send RESET to this account, if online and account_relay_object is incorrect
         relay = self.botnet_get_relay_account(channel, channel_state, None, "RESET")
         if not relay is channel_state.account_relay_object:
@@ -1515,29 +1787,6 @@ class BotNetVL:
                 print("{} -> {}".format(relay.account, reset_str))
                 to_send = [self.send_chat(reset_str, whisper_to = relay.bot_id)]
                 await self.send_resp(to_send)
-
-        try:
-            if self.state.hub_automirror:
-                hub_guild = self.bot.get_guild(self.state.hub_guild)
-                hub_cat = self.bot.get_channel(self.state.hub_category)
-                if hub_guild:
-                    if hub_cat:
-                        mirror_channel = await hub_guild.create_text_channel(channel.name, category=hub_cat, reason="Mirror #{} on {}".format(name, channel.guild.name))
-                    else:
-                        mirror_channel = await hub_guild.create_text_channel(channel.name, reason="Mirror of #{} on {}".format(name, channel.guild.name))
-
-                    # set values
-                    channel_state = BotNetVLChannelState()
-                    channel_state.guild         = mirror_channel.guild.id
-                    channel_state.channel_cb    = channel.id
-                    channel_state.feed_type     = "bncs"
-                    channel_state.account_relay = account_name
-                    # save channel config
-                    await self.save_channel_config(mirror_channel, channel_state)
-                    # save channel state to self
-                    self.channel_states[mirror_channel.id] = channel_state
-        except Exception as ex:
-            print("BotNet EXCEPTION creating mirror channel: {}".format(ex))
 
         await ctx.send(content=info("Created a Classic Battle.net channel feed from BotNet account {} to {}.".format(self.escape_text(account_name), channel.mention)))
 
@@ -1627,12 +1876,16 @@ class BotNetVL:
                 if not conf_set["user-editable"]:
                     await ctx.send(content="You may not set the feed setting called {}.".format(self.escape_text(key)))
                     return
-                val = self.parse_conf_value(ctx, val, conf_set["type"])
+                try:
+                    val = self.parse_conf_value(ctx, val, conf_set["type"])
+                except ValueError as vex:
+                    await ctx.send(content="Value is not valid for setting called {}: `{}`".format(self.escape_text(key), self.escape_code_text(str(vex))))
+                    return
                 data = {key: str(val)}
                 await self.config.channel(channel).get_attr(key).set(val)
                 channel_state = self.channel_states[channel.id]
                 setattr(channel_state, key, val)
-                if conf_set["set-causes-reset"]:
+                if "set-causes-reset" in conf_set and conf_set["set-causes-reset"]:
                     # send RESET to this account, if online and account_relay_object is incorrect
                     relay = self.botnet_get_relay_account(channel, channel_state, None, "RESET")
                     if not relay is channel_state.account_relay_object:
@@ -1642,6 +1895,14 @@ class BotNetVL:
                             print("{} -> {}".format(relay.account, reset_str))
                             to_send = [self.send_chat(reset_str, whisper_to = relay.bot_id)]
                             await self.send_resp(to_send)
+                if "set-updates-timezone" in conf_set and conf_set["set-updates-timezone"]:
+                    try:
+                        channel_state.timezone_object = pytz.timezone(channel_state.timezone.replace(" ", "_"))
+                    except pytz.exceptions.UnknownTimeZoneError:
+                        channel_state.timezone_object = pytz.utc
+                if "set-updates-users" in conf_set and conf_set["set-updates-users"]:
+                    await self.post_userlist(channel, channel_state)
+                    channel_state.userlist_dirty = False
             else:
                 data = {}
                 for key in key_matches:
@@ -1744,6 +2005,8 @@ class BotNetVLChannelState():
         self.users                  = []
         self.join_counter           = 0
         self.userlist_dirty         = False
+        self.userlist_update_lock   = False
+        self.timezone_object        = pytz.utc
 
     def __repl__(self):
         return "<{} feed relaying {} to {}>".format(self.feed_type, self.account_relay, self.guild)
@@ -1798,19 +2061,17 @@ class BotNetVLUser:
 
 class BotNetVLWebChannelUser:
     """Represents a user on Classic Battle.net, seen through BotNet WebChannel events."""
-    def __init__(self, name, flags, ping, text, index, is_self = False):
+    def __init__(self, name, flags, ping, text, index, *, time = None, is_self = False):
         self.name = name
         self.flags = flags
         self.ping = ping
         self.text = text
         self.index = index
         self.is_self = is_self
+        self.join_time = time
 
     def __str__(self):
         return self.name
-
-    def get_product(self):
-        return self.text[3::-1]
 
     def priority(self):
         if self.has_flag(0x01): # Blizzard Representative
@@ -1839,6 +2100,223 @@ class BotNetVLWebChannelUser:
         else:
             flip = 1
         return (prio << 0x10000) + (flip * self.index)
+
+    def get_value(self, key, default):
+        if key in self.__dict__ and not getattr(self, key) is None:
+            return getattr(self, key)
+        else:
+            return default
+
+    def do_parse_text(self):
+        try:
+            self.product = self.text[3::-1]
+            try:
+                self.product_name = BotNetVL.product_map[self.product]["name"]
+            except KeyError:
+                self.product_name = "Unknown ({})".format(self.product)
+            self.icon_id = self.product
+            self.tag = None
+            self.level = None
+            self.wins = None
+            self.text_parsed_1 = "Unavailable"
+            self.text_parsed_2 = self.text_parsed_1
+            self.text_parsed_3 = self.text_parsed_2
+            if self.product == "DRTL" or self.product == "DSHR":
+                # Diablo-style
+                parts    = self.text[5:].split(" ")
+
+                # LTRD #level #class #diff #str #mag #dex #vit #gold #spawn
+                parts2 = [0] * 9
+                index = 0
+                for part in parts:
+                    if index >= len(parts2):
+                        break
+                    if part.isnumeric():
+                        parts2[index] = int(part)
+                    index += 1
+                parts = parts2
+                [self.level, self.char_class_id, self.char_diff_id,
+                 self.char_str, self.char_mag, self.char_dex, self.char_vit,
+                 self.char_gold, self.spawned] = parts
+
+                try:
+                    self.char_class = BotNetVL.d1_stats_char_list[self.char_class_id]
+                except IndexError:
+                    self.char_class = str(self.char_class_id)
+
+                if self.char_diff_id == 0:
+                    self.char_diff = "Normal"
+                elif self.char_diff_id == 1:
+                    self.char_diff = "Nightmare"
+                elif self.char_diff_id == 2:
+                    self.char_diff = "Hell"
+                else:
+                    self.char_diff = "Endgame"
+
+                self.custom_text = self.text[4:]
+
+                self.text_parsed_1 = "Level {level} {char_class}".format(level = self.level, char_class = self.char_class)
+                self.text_parsed_2 = "{p1}, {str} STR, {mag} MAG, {dex} DEX, {vit} VIT, {gold} gold".format(
+                        p1 = self.text_parsed_1, str = self.char_str, mag = self.char_mag,
+                        dex = self.char_dex, vit = self.char_vit, gold = self.char_gold)
+                self.text_parsed_3 = "{p2}, in {char_diff}".format(
+                        p2 = self.text_parsed_2, char_diff = self.char_diff)
+
+            elif self.product == "STAR" or self.product == "SEXP" or self.product == "W2BN" or self.product == "SSHR" or self.product == "JSTR":
+                # StarCraft style
+                parts    = self.text[5:].split(" ")
+                # check this field exists and has content before numeric thing
+                if len(parts) >= 9 and len(parts[8]) > 0:
+                    # 9th field exists and non-empty
+                    self.icon_id = parts[8][::-1]
+
+                # SEXP #rating #rank #wins #spawned #league #hrating #irating #irank ICON
+                parts2 = [0] * 8
+                index = 0
+                for part in parts:
+                    if index >= len(parts2):
+                        break
+                    if part.isnumeric():
+                        parts2[index] = int(part)
+                    index += 1
+                parts = parts2
+                [self.rating, self.rank, self.wins, self.spawned, self.league,
+                 self.rating_high, self.rating_im, self.rank_im] = parts
+
+                self.text_parsed_1 = ""
+                if self.wins > 0:
+                    self.text_parsed_1 += "{wins} wins".format(wins = self.wins)
+                self.text_parsed_2 = self.text_parsed_1
+                self.text_parsed_3 = self.text_parsed_2
+
+            elif self.product == "D2DV" or self.product == "D2XP":
+                # Diablo style
+                if len(self.text) == 4:
+                    self.is_open = True
+
+                    self.text_parsed_1 = "Open"
+                    self.text_parsed_2 = self.text_parsed_1
+                    self.text_parsed_3 = self.text_parsed_2
+                else:
+                    self.is_open = False
+                    parts    = self.text[4:].split(",", 2)
+                    parts[:] = parts + ([""] * (3 - len(parts)))
+
+                    # VD2DRealm,CharName,CHARDATAETC[33]
+                    [self.char_realm, self.char_name, self.char_data] = parts
+                    if len(self.char_data) >= 33:
+                        self.char_data_bytes = self.char_data.encode("cp1252", "replace")
+
+                        self.char_class_id = self.char_data_bytes[13]
+                        self.level = self.char_data_bytes[25]
+                        self.char_listing_flags = self.char_data_bytes[26]
+                        self.char_act_id = (self.char_data_bytes[27] & 0b00111110) >> 1
+                        self.char_ladder_id = self.char_data_bytes[30]
+
+                        self.char_is_hardcore = bool(self.char_listing_flags & 0x04)
+                        self.char_is_dead = bool(self.char_listing_flags & 0x08)
+                        self.char_is_expansion = bool(self.char_listing_flags & 0x20)
+                        self.char_is_ladder = bool(self.char_ladder_id != 0xff)
+                        if self.char_is_expansion:
+                            self.char_act = (self.char_act_id % 5) + 1
+                            self.char_diff_id = self.char_act_id // 5
+                        else:
+                            self.char_act = (self.char_act_id % 4) + 1
+                            self.char_diff_id = self.char_act_id // 4
+
+                        try:
+                            self.char_class     = BotNetVL.d2_stats_char_list  [self.char_class_id - 1]
+                            self.char_is_female = BotNetVL.d2_stats_char_female[self.char_class_id - 1]
+                        except IndexError as ex:
+                            print("BotNet ERROR Finding character class from D2 statstring char_class_id IndexError {}".format(ex))
+                            self.char_class     = str(self.char_class_id)
+                            self.char_is_female = False
+                        try:
+                            self.char_title     = BotNetVL.d2_stats_title_table[(self.char_diff_id, self.char_is_expansion, self.char_is_hardcore, self.char_is_female)]
+                        except KeyError as ex:
+                            print("BotNet ERROR Finding title from D2 statstring (diff_id, is_exp, is_hc, is_f) KeyError {}".format(ex))
+                            self.char_title     = ""
+
+                        #print("char {} title {} val = {:#02x} -> act_id = {}, diff_id = {}".format(self.char_name, self.char_title, self.char_data_bytes[27], self.char_act_id, self.char_diff_id))
+                        self.listing_flags_str = ""
+                        if self.char_is_expansion:
+                            self.listing_flags_str += "expansion, "
+                        else:
+                            self.listing_flags_str += "classic, "
+                        if self.char_is_ladder:
+                            self.listing_flags_str += "ladder, "
+                        else:
+                            self.listing_flags_str += "non-ladder, "
+                        if self.char_is_hardcore:
+                            self.listing_flags_str += "hardcore"
+                        else:
+                            self.listing_flags_str += "softcore"
+
+                        if self.char_diff_id == 0:
+                            self.char_diff = "Normal"
+                        elif self.char_diff_id == 1:
+                            self.char_diff = "Nightmare"
+                        elif self.char_diff_id == 2:
+                            self.char_diff = "Hell"
+                        else:
+                            self.char_diff = "Endgame"
+
+                        self.text_parsed_1 = ""
+                        if len(self.char_title) > 0:
+                            self.text_parsed_1 += "{char_title} {char_name}".format(
+                                    char_title = self.char_title, char_name = self.char_name)
+                        else:
+                            self.text_parsed_1 += "{char_name}".format(
+                                    char_title = self.char_title, char_name = self.char_name)
+                        self.text_parsed_2 = "Level {level} {char_class}, {p1}".format(
+                                p1 = self.text_parsed_1, level = self.level, char_class = self.char_class)
+                        self.text_parsed_3 = "{p2} in {listing_flags} {char_diff} on {char_realm}".format(
+                                p2 = self.text_parsed_2, listing_flags = self.listing_flags_str,
+                                char_diff = self.char_diff, char_realm = self.char_realm)
+                    else:
+                        self.text_parsed_1 = "Unrecognized"
+                        self.text_parsed_2 = self.text_parsed_1
+                        self.text_parsed_3 = self.text_parsed_2
+
+            elif self.product == "WAR3" or self.product == "W3XP":
+                # WarCraft III style
+                parts    = self.text[5:].split(" ")
+                self.level = 0
+                self.tag = ""
+                if len(parts) == 1:
+                    # 3RAW 0
+                    if parts[0].isnumeric():
+                        self.level = int(parts[0])
+                    else:
+                        self.icon_id = parts[0][::-1]
+                else:
+                    if len(parts) >= 2:
+                        # 3RAW 1R3W 5
+                        self.icon_id = parts[0][::-1]
+                        if parts[0].isnumeric():
+                            self.level = int(parts[1])
+                        else:
+                            self.level = 0
+                    if len(parts) >= 3:
+                        # 3RAW 2R3W 4 ToB
+                        self.tag = parts[2][::-1]
+                        self.Clan_tag = "Clan {tag}".format(tag = self.tag)
+                        self.clan_tag = "clan {tag}".format(tag = self.tag)
+
+                if self.level > 0:
+                    self.text_parsed_1 = "Level {level}".format(level = self.level)
+                    if len(self.tag) > 0:
+                        self.text_parsed_2 = "{p1} in Clan {tag}".format(
+                                p1 = self.text_parsed_1, tag = self.tag)
+                else:
+                    self.text_parsed_1 = ""
+                    if len(self.tag) > 0:
+                        self.text_parsed_2 = "In Clan {tag}".format(
+                                p1 = self.text_parsed_1, tag = self.tag)
+                self.text_parsed_3 = self.text_parsed_2
+        except Exception as ex:
+            print("BotNet EXCEPTION parsing user stats:")
+            traceback.print_exc()
 
     def __lt__(self, other): # self < other
         if other is None:
