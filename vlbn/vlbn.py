@@ -6,6 +6,7 @@ from redbot.core.utils.chat_formatting import escape, info, error
 from datetime import datetime, timedelta
 import asyncio
 import concurrent.futures
+import emoji
 import fnmatch
 import itertools
 import math
@@ -824,7 +825,7 @@ class BotNetVL:
                         "hl"                : s, \
                         "hl_end"            : s[::-1], \
                         "name"              : self.escape_text(str(user)), \
-                        "text"              : self.escape_text(text), \
+                        "text"              : self.escape_text(emoji.emojize(text, use_aliases=True)), \
                         }
                 if broadcast:
                     args["info_type"] = "broadcast"
@@ -1287,6 +1288,9 @@ class BotNetVL:
                 return []
         else:
             clean_content = message.clean_content
+
+        # convert default emoji
+        clean_content = emoji.demojize(clean_content)
 
         # convert text to array of strings
         messages      = self.handle_discord_text(clean_content, self.handle_discord_author(message.author), length)
