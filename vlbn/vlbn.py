@@ -1867,6 +1867,14 @@ class BotNetVL:
                 print("{} -> {}".format(relay.account, reset_str))
                 to_send = [self.send_chat(reset_str, whisper_to = relay.bot_id)]
                 await self.send_resp(to_send)
+            else:
+                # post userlist immediately since feed not online
+                await self.post_userlist(channel, channel_state)
+                channel_state.userlist_dirty = False
+        else:
+            # post userlist immediately since feed not online
+            await self.post_userlist(channel, channel_state)
+            channel_state.userlist_dirty = False
 
         await ctx.send(content=info("Created a Classic Battle.net channel feed from BotNet account {} to {}.".format(self.escape_text(account_name), channel.mention)))
 
@@ -1975,6 +1983,14 @@ class BotNetVL:
                             print("{} -> {}".format(relay.account, reset_str))
                             to_send = [self.send_chat(reset_str, whisper_to = relay.bot_id)]
                             await self.send_resp(to_send)
+                        else:
+                            # post userlist immediately since feed not online
+                            await self.post_userlist(channel, channel_state)
+                            channel_state.userlist_dirty = False
+                    else:
+                        # post userlist immediately since feed not online
+                        await self.post_userlist(channel, channel_state)
+                        channel_state.userlist_dirty = False
                 if "set-updates-timezone" in conf_set and conf_set["set-updates-timezone"]:
                     try:
                         channel_state.timezone_object = pytz.timezone(channel_state.timezone.replace(" ", "_"))
