@@ -657,11 +657,15 @@ class BotNetVL:
         
         If we already have a valid existant pin, then edits that in place."""
         #print("Posting userlist for {}...".format(channel_state))
+        #try:
+        #except concurrent.futures.CancelledError as ex:
+        #    # module unload or other cancel -- no return here
+        #    pass
         if self.state.chat_ready:
             if not channel_state is None:
                 if channel_state.do_users_pin:
                     if channel_state.userlist_update_lock:
-                        print("Waiting to update pin.")
+                        #print("Waiting to update pin.")
                         return
 
                     channel_state.userlist_update_lock = True
@@ -700,7 +704,7 @@ class BotNetVL:
 
                     # generate text for this message to be pinned
                     if   channel_state.feed_type == "botnet":
-                        text = self.handle_botnet_userlist(channel_state.users)
+                        text = self.handle_botnet_userlist(channel_state.users, self.state.self_user)
                     elif channel_state.feed_type == "bncs":
                         text = self.handle_webchannel_bncs_userlist(channel_state, channel_state.account_relay_object, channel_state.users)
                     else:
@@ -711,6 +715,7 @@ class BotNetVL:
                         # updating a pinned post
                         #print("UPDATING EXISTING USERLIST")
                         try:
+                            #print("{} userlist len {}".format(channel_state.account_relay, len(text)))
                             if post.content != text:
                                 await post.edit(content=text)
 
@@ -829,6 +834,9 @@ class BotNetVL:
                                 timestamp = dt_aware,
                                 timestamp_utc = dt,
                                 post = text))
+                    except concurrent.futures.CancelledError as ex:
+                        # module unload or other cancel -- no return here
+                        pass
                     except discord.Forbidden:
                         # write failed
                         #print("Message write forbidden!")
@@ -909,6 +917,9 @@ class BotNetVL:
                             timestamp = dt_aware,
                             timestamp_utc = dt,
                             post = text))
+                except concurrent.futures.CancelledError as ex:
+                    # module unload or other cancel -- no return here
+                    pass
                 except discord.Forbidden:
                     # write failed
                     #print("Message write forbidden!")
@@ -1274,6 +1285,9 @@ class BotNetVL:
                 if channel_state.userlist_dirty:
                     channel_state.userlist_dirty = False
                     await self.post_userlist(channel, channel_state)
+        except concurrent.futures.CancelledError as ex:
+            # module unload or other cancel -- no return here
+            pass
         except Exception as ex:
             print("BotNet EXCEPTION handling BotNet WebChannel command: {}".format(ex))
 
@@ -1515,36 +1529,62 @@ class BotNetVL:
                 "server_icon"       : self.emoji_name(self.address_friendlyname(user.bnet_server)),
                 }
 
-    def handle_botnet_userlist(self, users):
+    def handle_botnet_userlist(self, users, self_user):
         """Creates a textual list of users on BotNet for use on discord.
         
         Groups by database."""
-        userlist_fmt = ""
+        try:
+            userlist_fmt = ""
+            userlist_fmt_my_db = ""
+            db_count = 0
 
-        def db(user):
-            return user.database
+            def db(user):
+                return user.database
 
-        userlist = sorted(users.values(), key=db)
-        for k, g in itertools.groupby(userlist, key=db):
-            if not k is None and len(k) > 0:
-                userlist_fmt += "__Database: {}__\n".format(k)
-            else:
-                userlist_fmt += "__*No database*__\n"
-            for user in g:
-                bnet_inf = self.handle_botnet_user(user)
-                userlist_fmt += "#{}: {}\n".format(user.str_bot_id(), bnet_inf)
-            userlist_fmt += "\n"
+            userlist = sorted(users.values(), key=db)
+            for k, g in itertools.groupby(userlist, key=db):
+                db_count += 1
+                and_n_more_db = "*...and {count} other databases.*".format(count = db_count - 1)
+                if not k is None and len(k) > 0:
+                    text = "__{}__\n".format(k)
+                else:
+                    text = "__*Public*__\n"
+                if k == self_user.database:
+                    userlist_fmt_my_db += text
+                else:
+                    userlist_fmt += text
+                for user in g:
+                    bnet_inf = self.handle_botnet_user(user)
+                    text = "#{}: {}\n".format(user.str_bot_id(), bnet_inf)
+                    if k == self_user.database:
+                        userlist_fmt_my_db += text
+                    else:
+                        userlist_fmt += text
+                if k == self_user.database:
+                    userlist_fmt_my_db += "\n"
+                else:
+                    userlist_fmt += "\n"
 
-        #for user in users.values():
-        #    bnet_inf = self.handle_botnet_user(user)
-        #    userlist_fmt += "#{}: {}\n".format(user.str_bot_id(),  bnet_inf)
+            #for user in users.values():
+            #    bnet_inf = self.handle_botnet_user(user)
+            #    userlist_fmt += "#{}: {}\n".format(user.str_bot_id(),  bnet_inf)
 
-        if len(userlist_fmt) == 0:
-            userlist_fmt = "*No users.*"
+            if len(userlist_fmt) == 0 and len(userlist_fmt_my_db) == 0:
+                userlist_fmt = "*No users.*"
 
-        return "__**Users on BotNet server:**__ ({count})\n\n{list}".format( \
-                count = len(users), \
-                list = userlist_fmt)
+            wrapper = "__**Users on BotNet ({count})**__\n\n{my_db_list}{list}".format( \
+                    count = len(users), \
+                    my_db_list = "", list = "")
+
+            if len(wrapper) + len(userlist_fmt) + len(userlist_fmt_my_db) > 2000:
+                userlist_fmt = and_n_more_db
+
+            return "__**Users on BotNet ({count})**__\n\n{my_db_list}{list}".format( \
+                    count = len(users), \
+                    my_db_list = userlist_fmt_my_db, \
+                    list = userlist_fmt)
+        except Exception as ex:
+            print("BotNet EXCEPTION creating BotNet userlist: {}".format(ex))
 
     def handle_botnet_user(self, user):
         """Converts a user object to text form to be displayed on discord.
