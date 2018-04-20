@@ -185,8 +185,15 @@ class BotNetVL:
         self.channel_states = {}
         self.tasks = []
 
+        self.counter = 0
+        self.counter_on_last_packet = 0
+
+        coro = self.botnet_timer()
+        self.tasks.append(self.bot.loop.create_task(coro))
+
         coro = self.botnet_main()
         self.tasks.append(self.bot.loop.create_task(coro))
+
 
     def __unload(self):
         for task in self.tasks:
@@ -228,6 +235,44 @@ class BotNetVL:
         except Exception as ex:
             print("BotNet EXCEPTION: {}".format(ex))
 
+    async def botnet_timer(self):
+        last_snapshot = None
+        try:
+            while True:
+                await asyncio.sleep(1)
+                self.counter += 1
+
+                if self.state.socket:
+                    if self.counter_on_last_packet >= self.counter + 30:
+                        # send keep alive after 30 seconds of no packets sent or received
+                        #print("sending keepalive")
+                        to_send = [self.send_keep_alive()]
+                        await self.send_resp(to_send)
+                
+                for task in self.tasks:
+                    if task.done():
+                        #print("removed task: {}".format(task))
+                        self.tasks.remove(task)
+
+                #if (self.counter % 600) == 0:
+                    #print("taking snapshot")
+                    #snapshot = tracemalloc.take_snapshot()
+                    #if last_snapshot:
+                    #    #display_top(snapshot)
+                    #    top_stats = snapshot.compare_to(last_snapshot, 'lineno')
+                    #
+                    #    print("[ Top 10 differences ]")
+                    #    for stat in top_stats[:10]:
+                    #        print(stat)
+                    #last_snapshot = snapshot
+                    #print("took snapshot")
+        except concurrent.futures.CancelledError as ex:
+            # module unload or other cancel -- no return here
+            pass
+        except Exception as ex:
+            print("BotNet EXCEPTION: {}".format(ex))
+            traceback.print_exc()
+
     async def botnet_main(self):
         """Initialize self.state and then connect to BotNet.
 
@@ -248,11 +293,7 @@ class BotNetVL:
 
                 await self.bot.loop.sock_connect(self.state.socket, (self.state.server, self.state.port))
 
-                #print("connected")
-
                 to_send = self.botnet_on_connected()
-
-                #self.bot.loop.create_task(150, self.keep_alive, feed)
 
                 while True: # receive loop
                     await self.send_resp(to_send)
@@ -511,19 +552,12 @@ class BotNetVL:
         packet.append_uint8(0x00) # odb whisp option 0 (receive)
         return packet
 
-    async def keep_alive(self):
-        """Keep Alive Timer Tick
-
-        Call send_keep_alive and then wait another 150 seconds."""
-        to_send = [self.send_keep_alive()]
-        await self.send_resp(to_send)
-        self.bot.loop.call_later(150, self.keep_alive)
-
     async def send_resp(self, to_send):
         """Send Response
         
         Send generated response(s) in to_send array to the socket. Used with constructed packets."""
         if self.state.socket:
+            self.counter_on_last_packet = self.counter
             for resp in to_send:
                 if resp is None: # yield None pauses instead of sends
                     await asyncio.sleep(1)
@@ -614,6 +648,7 @@ class BotNetVL:
                 return None
             pleft -= len(part)
             buf += part
+        self.counter_on_last_packet = self.counter
         #print("recv pkt 0x{:02x} len {}\n{}".format(header[1], len(header + buf), bytes(header + buf)))
         return BotNetVLPacket(data = bytearray(header + buf))
 
