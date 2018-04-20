@@ -116,19 +116,19 @@ class BotNetVL:
 
 
     product_map = {
-            "CHAT": { "name": "Chat" },
-            "DRTL": { "name": "Diablo" },
-            "DSHR": { "name": "Diablo Shareware" },
-            "SSHR": { "name": "StarCraft Shareware" },
-            "JSTR": { "name": "StarCraft Japanese" },
-            "STAR": { "name": "StarCraft" },
-            "SEXP": { "name": "StarCraft: Brood War" },
-            "W2BN": { "name": "Warcraft II: Battle.net Edition" },
-            "D2DV": { "name": "Diablo II" },
-            "D2XP": { "name": "Diablo II: Lord of Destruction" },
-            "WAR3": { "name": "Warcraft III: Reign of Chaos" },
-            "W3XP": { "name": "Warcraft III: The Frozen Throne" },
-            ""    : { "name": "Unset" },
+            "CHAT": { "name_short": "Chat",   "name": "Chat" },
+            "DRTL": { "name_short": "Diablo", "name": "Diablo" },
+            "DSHR": { "name_short": "DiabloS","name": "Diablo Shareware" },
+            "SSHR": { "name_short": "SCS",    "name": "StarCraft Shareware" },
+            "JSTR": { "name_short": "SCJ",    "name": "StarCraft Japanese" },
+            "STAR": { "name_short": "SC",     "name": "StarCraft" },
+            "SEXP": { "name_short": "SC BW",  "name": "StarCraft: Brood War" },
+            "W2BN": { "name_short": "W2 BNE", "name": "Warcraft II: Battle.net Edition" },
+            "D2DV": { "name_short": "D2",     "name": "Diablo II" },
+            "D2XP": { "name_short": "D2 LoD", "name": "Diablo II: Lord of Destruction" },
+            "WAR3": { "name_short": "W3 RoC", "name": "Warcraft III: Reign of Chaos" },
+            "W3XP": { "name_short": "W3 TFT", "name": "Warcraft III: The Frozen Throne" },
+            ""    : { "name_short": "",       "name": "Unset" },
     }
     
     d1_stats_char_list   = ["Warrior", "Rogue", "Sorcerer"]
@@ -176,8 +176,6 @@ class BotNetVL:
 
     def __init__(self, bot):
         self.bot = bot
-
-        #channel_conf = 
 
         self.config = Config.get_conf(self, identifier=0xff5269620001)
         self.config.register_global(**BotNetVL.global_conf)
@@ -1459,6 +1457,7 @@ class BotNetVL:
                 "prod_list_icon"    : self.emoji_name(prod_oper),
                 "text"              : wc_user.text,
                 "prod_name"         : wc_user.product_name,
+                "prod_name_short"   : wc_user.product_name_short,
                 "text_parsed_1"     : wc_user.text_parsed_1,
                 "text_parsed_2"     : wc_user.text_parsed_2,
                 "text_parsed_3"     : wc_user.text_parsed_3,
@@ -2118,8 +2117,10 @@ class BotNetVLWebChannelUser:
             self.product = self.text[3::-1]
             try:
                 self.product_name = BotNetVL.product_map[self.product]["name"]
+                self.product_name_short = BotNetVL.product_map[self.product]["name_short"]
             except KeyError:
                 self.product_name = "Unknown ({})".format(self.product)
+                self.product_name_short = self.product
             self.icon_id = self.product
             self.tag = None
             self.level = None
@@ -2216,7 +2217,7 @@ class BotNetVLWebChannelUser:
                         self.char_class_id = self.char_data_bytes[13]
                         self.level = self.char_data_bytes[25]
                         self.char_listing_flags = self.char_data_bytes[26]
-                        self.char_act_id = (self.char_data_bytes[27] & 0b00111110) >> 1
+                        self.char_act_id = (self.char_data_bytes[27] & 0b00011110) >> 1
                         self.char_ladder_id = self.char_data_bytes[30]
 
                         self.char_is_hardcore = bool(self.char_listing_flags & 0x04)
@@ -2299,7 +2300,7 @@ class BotNetVLWebChannelUser:
                     if len(parts) >= 2:
                         # 3RAW 1R3W 5
                         self.icon_id = parts[0][::-1]
-                        if parts[0].isnumeric():
+                        if parts[1].isnumeric():
                             self.level = int(parts[1])
                         else:
                             self.level = 0
