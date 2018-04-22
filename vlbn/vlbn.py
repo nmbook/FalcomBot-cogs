@@ -11,6 +11,7 @@ import fnmatch
 import itertools
 import math
 import pytz
+import re
 import socket
 import struct
 import traceback
@@ -173,6 +174,10 @@ class BotNetVL:
             (3,     True , True , False) : "Guardian",
             (3,     True , True , True ) : "Guardian",
     }
+
+    re_discord_link = re.compile(r"\b(?:\<)?(?:http|https|steam)\\\:\/\/[^>\s]+\/?[^>\s]*>?\b")
+    re_discord_emoji = re.compile(r"\\\:([A-Za-z0-9-_]{2,32})\\\:")
+    re_discord_emoji_object = re.compile(r"<a?(\:[A-Za-z0-9-_]{2,32}\:)[0-9]+>")
 
     def __init__(self, bot):
         self.bot = bot
@@ -868,7 +873,7 @@ class BotNetVL:
                         "hl"                : s, \
                         "hl_end"            : s[::-1], \
                         "name"              : self.escape_text(str(user)), \
-                        "text"              : self.escape_text(emoji.emojize(text, use_aliases=True)), \
+                        "text"              : self.rich_text(text), \
                         }
                 if broadcast:
                     args["info_type"] = "broadcast"
@@ -1292,7 +1297,7 @@ class BotNetVL:
             print("BotNet EXCEPTION handling BotNet WebChannel command: {}".format(ex))
 
     def escape_text(self, text):
-        """Escapes text to be passed from BotNet to discord."""
+        """Escapes text to be passed to discord."""
         text = text.replace("\\", "\\\\")
         text = text.replace("*", "\\*")
         text = text.replace("~", "\\~")
@@ -1302,6 +1307,46 @@ class BotNetVL:
         text = text.replace("`", "\\`")
         text = text.replace("@", "\\@")
         return escape(text, mass_mentions=True)
+
+    def rich_text(self, text):
+        """Prepares rich text (user chat) to be passed from BotNet/Battle.net to discord."""
+        text = self.escape_text(text)
+        repl = []
+        for link_match in BotNetVL.re_discord_link.finditer(text):
+            l_text = link_match.group(0)
+            l_text = l_text.replace("\\:", ":")
+            l_text = l_text.replace("\\<", "<")
+            l_text = l_text.replace("\\_", "_")
+            l_text = l_text.replace("\\~", "~")
+            l_text = l_text.replace("\\@", "@")
+            l_before = link_match.group(0)
+            if "%28" in l_text or "(" in l_text:
+                #print("len {} endpos {}".format(len(text), link_match.end(0)))
+                endpos = link_match.end(0)
+                if len(text) >= endpos + 1:
+                    if   text[endpos] == ")":
+                        l_before += ")"
+                        l_text += ")"
+                    elif text[endpos:endpos + 2] == "%29":
+                        l_before += "%29"
+                        l_text += "%29"
+            if not l_text.startswith("<") and not l_text.endswith(">"):
+                l_text = "<{}>".format(l_text)
+            #print(" _{}_ -> _{}_ ".format(l_before, l_text))
+            repl.append((l_before, l_text))
+
+        for em_match in BotNetVL.re_discord_emoji.finditer(text):
+            em_text = em_match.group(0)
+            em_name = em_match.group(1)
+            for em_obj in self.bot.emojis:
+                if em_obj.name == em_name:
+                    repl.append((em_text, str(em_obj)))
+                    break
+
+        for (find, sub) in repl:
+            text = text.replace(find, sub)
+
+        return text
 
     def safe_format(self, format_str, default_format_str, **args):
         """Runs a format attempt and if it fails due to an unknown parameter, run the default format instead."""
@@ -1340,6 +1385,13 @@ class BotNetVL:
 
         # convert default emoji
         clean_content = emoji.demojize(clean_content)
+
+        # convert custom emoji
+        repl = []
+        for em_match in BotNetVL.re_discord_emoji_object.finditer(clean_content):
+            repl.append((em_match.group(0), em_match.group(1)))
+        for (find, sub) in repl:
+            clean_content = clean_content.replace(find, sub)
 
         # convert text to array of strings
         messages      = self.handle_discord_text(clean_content, self.handle_discord_author(message.author), length)
