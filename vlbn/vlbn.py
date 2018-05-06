@@ -2015,7 +2015,7 @@ class BotNetVL:
             if is_changing:
                 key = key_matches[0]
                 val = self.parse_conf_value(ctx, val, "str")
-                data = {key: str(val)}
+                data = {key: val}
                 await self.config.get_attr(key).set(val)
                 setattr(self.state, key, val)
             else:
