@@ -41,44 +41,79 @@ class BotNetVL:
     }
 
     channel_conf = {
-            "guild":                { "default": 0,      "user-editable": False, "type": "guild-id", },
-            "channel_cb":           { "default": 0,      "user-editable": False, "type": "channel-id", },
-            "feed_type":            { "default": "none", "user-editable": False, "type": "one-of:none,botnet,bncs", },
-            "account_relay":        { "default": None,   "user-editable": True,  "set-causes-reset": True, "type": "str", },
-            "users_pin":            { "default": 0,      "user-editable": False, "type": "message-id", },
-            "chat_disabled":        { "default": False,  "user-editable": False, "type": "bool", },
-            "chat_roles":           { "default": [],     "user-editable": False, "type": "list-of:role-id", },
-            "do_users_pin":         { "default": True,   "user-editable": True,  "set-updates-users": True, "type": "bool", },
-            "do_join_part":         { "default": True,   "user-editable": True,  "type": "bool", },
-            "do_echo_self":         { "default": False,  "user-editable": True,  "type": "bool", },
-            "post_format":          { "default": "`{timestamp:%H:%M:%S}` {post}", "user-editable": True, "type": "str:format", },
-            "join_format":          { "default": "{prod_icon}{name} has joined.",
+            "guild":                        { "default": 0,      "user-editable": False, "type": "guild-id", },
+            "channel_cb":                   { "default": 0,      "user-editable": False, "type": "channel-id", },
+            "feed_type":                    { "default": "none", "user-editable": False, "type": "one-of:none,botnet,bncs", },
+            "account_relay":                { "default": None,   "user-editable": True,  "set-causes-reset": True, "type": "str", },
+            "users_pin":                    { "default": 0,      "user-editable": False, "type": "message-id", },
+            "chat_disabled":                { "default": False,  "user-editable": False, "type": "bool", },
+            "chat_roles":                   { "default": [],     "user-editable": False, "type": "list-of:role-id", },
+            "do_users_pin":                 { "default": True,   "user-editable": True,  "set-updates-users": True, "type": "bool", },
+            "do_join_part":                 { "default": True,   "user-editable": True,  "type": "bool", },
+            "do_echo_self":                 { "default": False,  "user-editable": True,  "type": "bool", },
+
+            "post_format":                  { "default": "`{timestamp:%H:%M:%S}` {post}", "user-editable": True, "type": "str:format", },
+            "join_format":                  { "default": "{prod_icon}{name} has joined.",
                 "user-editable": True, "type": "str:format", },
-            "part_format":          { "default": "{name} has left.",
+            "part_format":                  { "default": "{name} has left.",
                 "user-editable": True, "type": "str:format", },
-            "chat_format":          { "default": "<{hl}{name}{hl_end}> {text}",
+            "chat_format":                  { "default": "<{hl}{name}{hl_end}> {text}",
                 "user-editable": True, "type": "str:format", },
-            "emote_format":         { "default": "<{hl}{name}{hl_end} {text}>",
+            "emote_format":                 { "default": "<{hl}{name}{hl_end} {text}>",
                 "user-editable": True, "type": "str:format", },
-            "bot_alert_format":     { "default": "__**{INFO_TYPE}**__ {text}",
+            "bot_alert_format":             { "default": "__**{INFO_TYPE}**__ {text}",
                 "user-editable": True, "type": "str:format", },
-            "server_alert_format":  { "default": "__**SERVER {INFO_TYPE}**__ {text}",
+            "server_alert_format":          { "default": "__**SERVER {INFO_TYPE}**__ {text}",
                 "user-editable": True, "type": "str:format", },
-            "users_list_format":    { "default": "__**Users in {channel}{server_icon} ({count})**__\n\n{list}",
+
+            "users_list_format":            { "default": "__**Users in {channel}{server_icon} ({count})**__\n\n{list}",
                 "user-editable": True, "set-updates-users": True, "type": "str:format", },
-            "users_item_format":    { "default": "{prod_list_icon}{hl}{name}{hl_end}",
+            "users_item_format":            { "default": "{prod_list_icon}{hl}{name}{hl_end}",
                 "user-editable": True, "set-updates-users": True, "type": "str:format", },
-            "hl_norm_format":       { "default": "",    "user-editable": True, "set-updates-users": True, "type": "str:format", },
-            "hl_self_format":       { "default": "",    "user-editable": True, "set-updates-users": True, "type": "str:format", },
-            "hl_oper_format":       { "default": "**",  "user-editable": True, "set-updates-users": True, "type": "str:format", },
-            "timezone":             { "default": "UTC", "user-editable": True, "set-updates-timezone": True, "set-updates-users": True, "type": "str:timezone", },
+            "users_list_more_format":       { "default": "*...and {count} more.*",
+                "user-editable": True, "type": "str:format", },
+            "users_list_unavailable":       { "default": "*Battle.net feed is currently unavailable.*",
+                "user-editable": True, "type": "str", },
+            "users_list_empty":             { "default": "*No users.*",
+                "user-editable": True, "type": "str", },
+            
+            "text_prod_empty_format":       { "default": "No user stats available",
+                "user-editable": True, "type": "str:format", },
+            "text_prod_inv_format":         { "default": "Invalid user stats",
+                "user-editable": True, "type": "str:format", },
+            "text_d1_val_format":           { "default": "A level {level} {char_class} in {char_diff}",
+                "user-editable": True, "type": "str:format", },
+            "text_d1_ctx_format":           { "default": "Custom text: {text}",
+                "user-editable": True, "type": "str:format", },
+            "text_star_val_format":         { "default": "{wins:,} wins",
+                "user-editable": True, "type": "str:format", },
+            "text_d2_val_format":           { "default": "{title} {char_name}, level {level} in {char_diff}, realm {char_realm}",
+                "user-editable": True, "type": "str:format", },
+            "text_d2_open_format":          { "default": "Open character",
+                "user-editable": True, "type": "str:format", },
+            "text_w3_val_format":           { "default": "Level {level}",
+                "user-editable": True, "type": "str:format", },
+            "text_w3_val_clan_format":      { "default": "Level {level} in Clan {tag}",
+                "user-editable": True, "type": "str:format", },
+            
+            "hl_norm_format":               { "default": "",    "user-editable": True, "set-updates-users": True, "type": "str:format", },
+            "hl_self_format":               { "default": "",    "user-editable": True, "set-updates-users": True, "type": "str:format", },
+            "hl_oper_format":               { "default": "**",  "user-editable": True, "set-updates-users": True, "type": "str:format", },
+            
+            "timezone":                     { "default": "UTC", "user-editable": True, "set-updates-timezone": True, "set-updates-users": True, "type": "str:timezone", },
     }
 
     emoji_map = {
-            "USEast":       "<:useast:424674002943082499>",
-            "USWest":       "<:uswest:424674072404951050>",
-            "Europe":       "\U0001f1ea", # EU flag
+            "USEast":       "<:useast:424674002943082499>", # USEast emoji (combo of US flag, E ind)
+            "USWest":       "<:uswest:424674072404951050>", # USWest emoji (combo of US flag, W ind)
+            "Europe":       "\U0001f1ea\U0001f1fa", # EU flag
             "Asia":         "\U0001f30f", # Asia-facing globe
+            "USEastClassic":"<:useast:424674002943082499>",
+            "USWestClassic":"<:uswest:424674072404951050>",
+            "EuropeClassic":"\U0001f1ea\U0001f1fa", # EU flag
+            "KoreaClassic": "\U0001f1f0\U0001f1f7", # KR flag
+            "PTRClassic":   "<:bnet:423287228467380224>", # Battle.net emoji
+            "BotClassic":   "<:bnet:423287228467380224>", # Battle.net emoji
 
             "_bnet_disc":   "<:bnet_disc:424674000531226645>",
             "_oper":        "<:operator:424237309060448256>",
@@ -99,20 +134,26 @@ class BotNetVL:
     }
 
     resolve_map = {
-            "USEast": {"domain": "useast.battle.net",
+            "USEast":       {"domain": "useast.battle.net",
                 "addresses": ["199.108.55.54", "199.108.55.55", "199.108.55.56", "199.108.55.57",
                 "199.108.55.58", "199.108.55.59", "199.108.55.60", "199.108.55.61", "199.108.55.62"]},
-            "USWest": {"domain": "uswest.battle.net",
+            "USWest":       {"domain": "uswest.battle.net",
                 "addresses": ["12.129.236.14", "12.129.236.15", "12.129.236.16", "12.129.236.17",
                 "12.129.236.18", "12.129.236.19", "12.129.236.20", "12.129.236.21", "12.129.236.22"]},
-            "Europe": {"domain": "europe.battle.net",
+            "Europe":       {"domain": "europe.battle.net",
                 "addresses": ["5.42.181.14", "5.42.181.15", "5.42.181.16", "5.42.181.17", "5.42.181.18"]},
-            "Asia": {"domain": "asia.battle.net",
+            "Asia":         {"domain": "asia.battle.net",
                 "addresses": ["121.254.164.14", "121.254.164.15", "121.254.164.16", "121.254.164.17",
                 "121.254.164.18", "121.254.164.19", "121.254.164.20", "121.254.164.21",
                 "121.254.164.22", "121.254.164.23", "121.254.164.24", "121.254.164.25",
                 "121.254.164.26", "121.254.164.27", "121.254.164.28", "121.254.164.29",
-                "121.254.164.30", "121.254.164.31", "121.254.164.32", "121.254.164.33", "121.254.164.34"]}
+                "121.254.164.30", "121.254.164.31", "121.254.164.32", "121.254.164.33", "121.254.164.34"]},
+            "USEastClassic": {"domain": "connect-use.classic.blizzard.com", "addresses": ["37.244.27.100"]},
+            "USWestClassic": {"domain": "connect-usw.classic.blizzard.com", "addresses": ["37.244.26.100"]},
+            "EuropeClassic": {"domain": "connect-eur.classic.blizzard.com", "addresses": ["37.244.29.100"]},
+            "KoreaClassic":  {"domain": "connect-kor.classic.blizzard.com", "addresses": ["117.52.35.100"]},
+            "BotClassic":    {"domain": "connect-bot.classic.blizzard.com", "addresses": ["37.244.26.17"]},
+            "PTRClassic":    {"domain": "war3-ptr.classic.blizzard.com",    "addresses": ["37.244.26.200"]},
     }
 
 
