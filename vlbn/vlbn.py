@@ -658,7 +658,7 @@ class BotNetVL:
                                 break
                 if can_chat:
                     if   channel_state.feed_type == "botnet":
-                        to_send = self.handle_discord_message(message, out_suffix = "")
+                        to_send = self.handle_discord_message(message, out_suffix = "", do_echo_self = channel_state.do_echo_self)
                         await self.send_resp(to_send)
                     elif channel_state.feed_type == "bncs":
                         botnet_account = channel_state.account_relay
@@ -1236,8 +1236,12 @@ class BotNetVL:
                     await self.post_chat(channel, channel_state, **action["args"])
 
                 elif action["type"] == "event_chat":
-                    if action["event"]["id"] == 0x00 and not channel_state.do_echo_self:
-                        return
+                    if not channel_state.do_echo_self:
+                        # filter if one of the following is true
+                        if action["event"]["id"] == 0x00:
+                            return
+                        if action["event"]["id"] == 0x17 and action["event"]["name"] == channel_state.account_relay_object.bnet_name:
+                            return
 
                     # find user in user list
                     user_obj = None
@@ -1414,7 +1418,7 @@ class BotNetVL:
             dt_aware = dt
         return dt, dt_aware
 
-    def handle_discord_message(self, message, *, length = 496, in_prefix = "", out_prefix = "", out_suffix = "", whisper_to = 0):
+    def handle_discord_message(self, message, *, length = 496, in_prefix = "", out_prefix = "", out_suffix = "", whisper_to = 0, do_echo_self = False):
         """Takes a Discord message object and parses the content to be sent to BotNet."""
         if len(in_prefix) > 0:
             if message.clean_content.startswith(in_prefix):
@@ -1455,6 +1459,11 @@ class BotNetVL:
                         out_suf = out_suffix, \
                         author = self.handle_discord_author(message.author), \
                         content = content)
+
+                # do_echo_self (BotNet message only)
+                if whisper_to == 0 and do_echo_self:
+                    self.botnet_on_chat(self.state.self_user, text, 0x01, int(emote))
+
                 to_send.append(self.send_chat(text, whisper_to = whisper_to, emote = emote))
         return to_send
 
@@ -1541,7 +1550,7 @@ class BotNetVL:
         userlist_fmt = ""
 
         if user is None or not user.is_on_bnet():
-            return "*Battle.net feed is currently unavailable.*"
+            return channel_state.users_list_unavailable
 
         userlist = sorted([x for x in wc_users if x]) # sorts by priority
 
@@ -1553,7 +1562,10 @@ class BotNetVL:
 
         n = len(userlist)
         for wc_user in userlist:
-            and_n_more = "*...and {count} more.*".format(count = n)
+            and_n_more = self.safe_format(channel_state.users_list_more_format,
+                    BotNetVL.channel_conf["users_list_format"]["default"],
+                    count = n)
+            #and_n_more = "*...and {count} more.*".format(count = n)
             user_args = self.get_webchannel_bncs_users_item_format_args(channel_state, wc_user)
             bnet_inf = self.safe_format(channel_state.users_item_format,
                     BotNetVL.channel_conf["users_item_format"]["default"], **user_args)
@@ -1567,7 +1579,7 @@ class BotNetVL:
                 n = n - 1
 
         if len(wc_users) == 0:
-            userlist_fmt = "*No users.*"
+            userlist_fmt = channel_state.users_list_empty
 
         list_args["list"] = userlist_fmt
         return self.safe_format(channel_state.users_list_format,
