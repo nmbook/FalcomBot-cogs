@@ -70,7 +70,7 @@ class Info:
 
     @commands.command()
     async def userinfo(self, ctx, *, search_term = ''):
-        print(search_term)
+        #print(search_term)
         search_term = search_term.strip()
         user = None
         # is mention?
@@ -121,7 +121,7 @@ class Info:
                 elif len(str(user_obj.game)) > 0: # game
                     return '\U0001f3ae'
 
-        print("found {} ID {} {}".format(user, user.id, user.__class__.__name__))
+        #print("found {} ID {} {}".format(user, user.id, user.__class__.__name__))
         # defaults
         name = str(user)
         game = '*Cannot be seen by the bot.*'
