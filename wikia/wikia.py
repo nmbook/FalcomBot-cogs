@@ -1,7 +1,5 @@
 import discord
-from discord.ext import commands
-from redbot.core import Config
-from redbot.core import checks
+from redbot.core import commands, Config, checks
 from redbot.core.utils.chat_formatting import escape
 import aiohttp
 import asyncio
