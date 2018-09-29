@@ -115,7 +115,7 @@ class Rot13:
             # do we need to send a message?
             if settings["react"] == str(payload.emoji):
                 embed = discord.Embed(description=self._rot13(message.clean_content))
-                if isinstance(message.author, discord.Member):
+                if message.author.color != discord.Color.default():
                     embed.color = message.author.color
                 embed.set_author(name=message.author.display_name)
                 embed.set_thumbnail(url=message.author.avatar_url)
