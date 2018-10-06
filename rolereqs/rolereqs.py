@@ -5,7 +5,7 @@ import discord
 from redbot.core import commands, Config, checks
 from redbot.core.utils.chat_formatting import escape, info, error
 
-class RoleRequests:
+class RoleRequests(commands.Cog):
     """Adds or removes a role on users by request."""
 
     def __init__(self, bot):

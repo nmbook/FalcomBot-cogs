@@ -3,7 +3,7 @@ from redbot.core import commands, Config, checks
 from redbot.core.utils.chat_formatting import escape, info, error
 import codecs
 
-class Rot13:
+class Rot13(commands.Cog):
     """Provides ROT-13 encoding/decoding functionality, and the ability to auto-decode messages with reactions."""
 
     guild_conf = {

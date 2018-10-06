@@ -1,7 +1,5 @@
 import discord
-from discord.ext import commands
-from redbot.core import Config
-from redbot.core import checks
+from redbot.core import commands, Config, checks
 from redbot.core.utils.chat_formatting import escape, info, error
 import aiohttp
 import asyncio
@@ -11,7 +9,7 @@ import string
 import traceback
 import urllib.parse
 
-class Info:
+class Info(commands.Cog):
     """Commands to view user, channel, role, server, and emoji info."""
 
     def __init__(self, bot):

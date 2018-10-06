@@ -1,7 +1,5 @@
 import discord
-from discord.ext import commands
-from redbot.core import Config
-from redbot.core import checks
+from redbot.core import commands, Config, checks
 from redbot.core.utils.chat_formatting import escape, info, error
 from datetime import datetime, timedelta
 import asyncio
@@ -16,7 +14,7 @@ import socket
 import struct
 import traceback
 
-class BotNetVL:
+class BotNetVL(commands.Cog):
     """Provides a chat-only bridge between Discord and Classic Battle.net (BNCS).
     
     Uses a bridge to Valhalla Legends' (vL) "BotNet" service and an adaptation of the "WebChannel" protocol from existing BNCS bots.
