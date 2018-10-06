@@ -16,7 +16,7 @@ match_file_options = re.compile('|'.join(['border', 'frameless', 'frame', 'thumb
                         'baseline', 'sub', 'super', 'top', 'text-top', 'middle', 'bottom', 'text-bottom',
                         'link=.*', 'alt=.*', 'page=.*', 'class=.*', 'lang=.*']))
 
-class Wikia:
+class Wikia(commands.Cog):
     """Command to view Wikia pages."""
 
     def __init__(self, bot):

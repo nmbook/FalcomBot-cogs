@@ -1,0 +1,7 @@
+{
+    "author": ["Ribose"],
+    "description": "ROT-13 command and allows users to react with :unlock: to ROT-13 quickly.",
+    "short": "ROT-13 command and reaction system.",
+    "tags": ["rot13", "utilities"]
+}
+

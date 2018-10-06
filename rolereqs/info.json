@@ -1,7 +1,6 @@
 {
     "author": ["Ribose"],
     "description": "Allows users to request roles from a list set by the moderators.",
-    "disabled": false,
     "short": "Allows users to request roles.",
     "tags": ["roles", "utilities"]
 }
