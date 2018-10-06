@@ -1,0 +1,7 @@
+{
+    "author": ["Ribose"],
+    "description": "Utility commands to encode and manipulate text.",
+    "short": "Utility text commands.",
+    "tags": ["text", "encoding", "utilities"]
+}
+
