@@ -48,7 +48,7 @@ class BotNetVL(commands.Cog):
             "chat_roles":                   { "default": [],     "user-editable": False, "type": "list-of:role-id", },
             "do_users_pin":                 { "default": True,   "user-editable": True,  "set-updates-users": True, "type": "bool", },
             "do_join_part":                 { "default": True,   "user-editable": True,  "type": "bool", },
-            "do_echo_self":                 { "default": False,  "user-editable": True,  "type": "bool", },
+            "do_echo_self":                 { "default": True,  "user-editable": True,  "type": "bool", },
 
             "post_format":                  { "default": "`{timestamp:%H:%M:%S}` {post}", "user-editable": True, "type": "str:format", },
             "join_format":                  { "default": "{prod_icon}{name} has joined.",
@@ -115,6 +115,7 @@ class BotNetVL(commands.Cog):
 
             "_bnet_disc":   "<:bnet_disc:424674000531226645>",
             "_oper":        "<:operator:424237309060448256>",
+            "_bot":         "\U0001f916", # robot face
 
             "DRTL":         "<:drtl:434571869635608586>",
             "DSHR":         "<:drtl:434571869635608586>",
@@ -127,13 +128,15 @@ class BotNetVL(commands.Cog):
             "W2BN":         "<:w2bn:424237361824661504>",
             "WAR3":         "<:war3:424237641098067968>",
             "W3XP":         "<:w3xp:424237662757715992>",
+            "CHAT":         "\U0001f916", # robot face
 
             "_":            "<:blank:424238165155512350>",
     }
 
     resolve_map = {
             "USEast":       {"domain": "useast.battle.net",
-                "addresses": ["199.108.55.54", "199.108.55.55", "199.108.55.56", "199.108.55.57",
+                "addresses": ["199.108.55.51", "199.108.55.52", "199.108.55.53",
+                "199.108.55.54", "199.108.55.55", "199.108.55.56", "199.108.55.57",
                 "199.108.55.58", "199.108.55.59", "199.108.55.60", "199.108.55.61", "199.108.55.62"]},
             "USWest":       {"domain": "uswest.battle.net",
                 "addresses": ["12.129.236.14", "12.129.236.15", "12.129.236.16", "12.129.236.17",
@@ -225,6 +228,7 @@ class BotNetVL(commands.Cog):
         self.config.register_global(**BotNetVL.global_conf)
         self.config.register_channel(**{k: v["default"] for k, v in BotNetVL.channel_conf.items()})
 
+        self.discord_status = ""
         self.state = None
         self.channel_states = {}
         self.tasks = []
@@ -242,6 +246,28 @@ class BotNetVL(commands.Cog):
     def __unload(self):
         for task in self.tasks:
             task.cancel()
+
+    async def set_discord_status(self):
+        """Sets the discord status for the bot to indicate current valid feed count."""
+        if self.state.chat_ready:
+            s = "s"
+            accounts = set()
+            for channel_id, channel_state in self.channel_states.items():
+                if channel_state.feed_type == "bncs" and channel_state.guild != self.state.hub_guild:
+                    if not channel_state.account_relay_object is None:
+                        channel = self.bot.get_channel(channel_id)
+                        if channel and isinstance(channel, discord.TextChannel):
+                            accounts.add(channel_state.account_relay_object)
+            count = len(accounts)
+            if count == 1:
+                s = ""
+            text = "{count} Battle.net channel{s}".format(count = count, s = s)
+        else:
+            text = "Initializing..."
+        activity = discord.Activity(name=text, type=discord.ActivityType.watching)
+        if text != self.discord_status:
+            self.discord_status = text
+            await self.bot.change_presence(status=discord.Status.online, activity=activity)
 
     async def load_config(self):
         """Loads the configuration into the self.state and self.channel_states objects."""
@@ -325,6 +351,8 @@ class BotNetVL(commands.Cog):
         while True:
             try:
                 await self.load_config()
+
+                await self.set_discord_status()
 
                 print("Connecting to {}...".format(self.state.server))
 
@@ -700,6 +728,9 @@ class BotNetVL(commands.Cog):
         """Tries to post the userlist and pin it to current channel.
         
         If we already have a valid existant pin, then edits that in place."""
+
+        await self.set_discord_status()
+
         #print("Posting userlist for {}...".format(channel_state))
         #try:
         #except concurrent.futures.CancelledError as ex:
@@ -1593,6 +1624,8 @@ class BotNetVL(commands.Cog):
         if wc_user.is_priority():
             prod_oper = "_oper"
             s += channel_state.hl_oper_format
+        if prod == "CHAT":
+            prod_oper = "_bot"
         if not channel_state.hl_norm_format in s:
             s += channel_state.hl_norm_format
         return {
@@ -1858,6 +1891,25 @@ class BotNetVL(commands.Cog):
         
         return val
 
+    def check_can_operate_feed():
+        """Check: First thing that's true returns True: is bot owner, has admin role on server, has admin or manage_server role on server."""
+        async def predicate(ctx):
+            is_bot_owner = await ctx.bot.is_owner(ctx.author)
+            if ctx.guild is None:
+                return is_bot_owner
+            perms = ctx.channel.permissions_for(ctx.author)
+            has_guild_perms = perms.administrator or perms.manage_guild
+            admin_role_id = await ctx.bot.db.guild(ctx.guild).admin_role()
+            admin_role = discord.utils.get(ctx.guild.roles, id=admin_role_id)
+            has_admin_role = admin_role in ctx.author.roles
+            return has_guild_perms or has_admin_role
+        return commands.check(predicate)
+
+    @commands.command()
+    @check_can_operate_feed()
+    async def test_perm(self, ctx):
+        await ctx.send("Permission granted.")
+
     @commands.command(aliases=["bnreconnect", "bnrc"])
     @checks.is_owner()
     async def botnetreconnect(self, ctx):
@@ -1915,6 +1967,12 @@ class BotNetVL(commands.Cog):
         del self.tasks[:]
         coro = self.botnet_main()
         self.tasks.append(self.bot.loop.create_task(coro))
+
+    @commands.command(aliases=["bncsremfeed", "bncsunfeed"])
+    @checks.guildowner_or_permissions(manage_guild=True)
+    async def bncsdelfeed(self, ctx, channel : discord.TextChannel):
+        """Removes a feed to a Discord channel."""
+        pass
 
     @commands.command()
     @checks.guildowner_or_permissions(manage_guild=True)
