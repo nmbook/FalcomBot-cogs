@@ -25,12 +25,45 @@ class RoleRequests:
         self.config.register_guild(**default_guild)
         self.config.register_channel(**default_channel)
     
-    @commands.group(aliases=["iam", "req"])
+    @commands.group(aliases=["iam", "req"], invoke_without_command=True)
     @commands.guild_only()
-    async def request(self, ctx):#, *, raw_text):
+    async def request(self, ctx, *, role_name):#, *, raw_text):
         """Requests access to a role."""
-        if ctx.invoked_subcommand is None:
-            await ctx.send_help()
+        #if ctx.invoked_subcommand is None:
+        #    await ctx.send_help()
+        #"""Gives you a requestable role."""
+        # requestable list
+        role_subset = await self.config.guild(ctx.guild).roles()
+        max_requestable = await self.config.guild(ctx.guild).max_requestable()
+
+        # find matches
+        role_to_add = await self._find_role(ctx, role_name, role_subset=role_subset)
+        if role_to_add is None:
+            return
+
+        if role_to_add in ctx.author.roles:
+            await ctx.send(error("You already have the role `{}`.".format(role_to_add)))
+            return
+
+        if not role_to_add.id in role_subset:
+            await ctx.send(error("You cannot request `{}`.".format(role_to_add)))
+            return
+
+        count = 0
+        for role in ctx.author.roles:
+            if role.id in role_subset:
+                count += 1
+                if count >= max_requestable:
+                    cpl = ""
+                    if count != 1:
+                        cpl = "s"
+                    await ctx.send(error("You already have {} role{} that can be requested (max: {}). You may ask a moderator or you may remove a role with with `{}request rem NAME`.".format(count, cpl, max_requestable, ctx.prefix[0])))
+                    return
+
+        await ctx.author.add_roles(role_to_add)
+        if await self.config.guild(ctx.guild).auto_post_list():
+            await self._auto_post_list(ctx)
+        await ctx.send("Added {} to your roles.".format(self._get_role_styled(role_to_add, show_stats=True)))
     
     @request.command()
     @commands.guild_only()
@@ -263,7 +296,7 @@ class RoleRequests:
             reqchan = ctx.guild.get_channel(reqchan_id)
             if not reqchan is None:
                 in_chan = " in {}".format(reqchan.mention)
-        for role_obj in sorted(ctx.guild.role_hierarchy, reverse=True):
+        for role_obj in sorted(ctx.guild.roles, reverse=False):
             for role_id in rolereqs:
                 if role_obj.id == role_id:
                     if (n % 5) == 0:
@@ -281,7 +314,7 @@ class RoleRequests:
         """Finds a role by text name using loose matching. Strips "@" symbols, ignores case, and accepts role pings and partial text matches."""
         if role_subset is None:
             # just get all roles on server...
-            role_subset = [role.id for role in ctx.guild.role_hierarchy]
+            role_subset = [role.id for role in ctx.guild.roles]
 
         # check if role-mention
         role_to_add = None
@@ -300,7 +333,7 @@ class RoleRequests:
         # if not mention, check role_name text and search for role by name
         role_to_add_results = []
         if role_to_add is None:
-            for role_obj in sorted(ctx.guild.role_hierarchy, reverse=True):
+            for role_obj in sorted(ctx.guild.roles, reverse=False):
                 if not role_obj.id in role_subset:
                     # role isn"t in "requestable subset", skip this result
                     continue
