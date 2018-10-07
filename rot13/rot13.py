@@ -131,10 +131,31 @@ class Rot13(commands.Cog):
     async def rot13(self, ctx, *, text):
         """Encodes text using ROT-13."""
         if isinstance(ctx.channel, discord.TextChannel):
-            # this not is a DM or group DM, discard early
-            return
+            # this not is a DM or group DM
+            message = ctx.message
+            footer = "In channel #{channel} on {guild} at {time:%Y-%m-%d %H:%M} UTC".format(channel = ctx.channel, guild = message.guild, time = message.created_at)
+            with ctx.typing():
+                try:
+                    await message.delete()
+                except (discord.Forbidden, discord.HTTPException):
+                    # permissions to delete here denied
+                    await ctx.send(content=error("This is a public location and I do not have permission to delete your message!"))
+                    return
 
-        await ctx.send(content=self._rot13(text))
+                embed = discord.Embed(description=self._rot13(text))
+                if message.author.color != discord.Color.default():
+                    embed.color = message.author.color
+                embed.set_author(name=message.author.display_name)
+                embed.set_thumbnail(url=message.author.avatar_url)
+                embed.set_footer(text=footer)
+                #await user.send(content=self._rot13(message.clean_content))
+                try:
+                    await ctx.send(embed=embed)
+                except (discord.Forbidden, discord.HTTPException):
+                    await ctx.send(content=error("This is a public location and I do not have the ability to post an embed!"))
+        else:
+            # private location: only reply with text
+            await ctx.send(content=self._rot13(text))
 
     @commands.group()
     @checks.mod_or_permissions(manage_guild=True)
@@ -183,5 +204,6 @@ class Rot13(commands.Cog):
 
     def _rot13(self, text):
         """Do ROT-13."""
-        return codecs.encode(text, "rot_13")
+        # obscured links with [TEXT](URL) broken by making them all [TEXT]\(URL)
+        return codecs.encode(text.replace("](", "]\\("), "rot_13")
 
