@@ -296,7 +296,7 @@ class RoleRequests(commands.Cog):
             reqchan = ctx.guild.get_channel(reqchan_id)
             if not reqchan is None:
                 in_chan = " in {}".format(reqchan.mention)
-        for role_obj in sorted(ctx.guild.roles, reverse=False):
+        for role_obj in sorted(ctx.guild.roles, reverse=True):
             for role_id in rolereqs:
                 if role_obj.id == role_id:
                     if (n % 5) == 0:
@@ -333,7 +333,7 @@ class RoleRequests(commands.Cog):
         # if not mention, check role_name text and search for role by name
         role_to_add_results = []
         if role_to_add is None:
-            for role_obj in sorted(ctx.guild.roles, reverse=False):
+            for role_obj in sorted(ctx.guild.roles, reverse=True):
                 if not role_obj.id in role_subset:
                     # role isn"t in "requestable subset", skip this result
                     continue
