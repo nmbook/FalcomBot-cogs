@@ -9,8 +9,7 @@ class Rot13(commands.Cog):
     guild_conf = {
             "react":                "\U0001f513",
             "on_react_decode_dm":   True,
-            "auto_react_enabled":   False,
-            "message_text":         "rot13",
+            "auto_react_to":        "",
     }
 
 
@@ -50,10 +49,10 @@ class Rot13(commands.Cog):
                     return
 
         settings = await self.config.guild(message.guild).all()
-        if settings["on_react_decode_dm"] and settings["auto_react_enabled"]:
+        if settings["on_react_decode_dm"] and len(settings["auto_react_to"]) > 0:
             # do we need to add reaction?
-            if settings["message_text"] and \
-                    settings["message_text"] in message.clean_content:
+            if settings["auto_react_to"] and \
+                    settings["auto_react_to"] in message.clean_content:
                 # if TEXT is not None and TEXT is present, do reaction
                 await message.add_reaction(settings["react"])
 
@@ -159,7 +158,6 @@ class Rot13(commands.Cog):
 
     @commands.group()
     @checks.mod_or_permissions(manage_guild=True)
-    @commands.guild_only()
     async def rot13set(self, ctx):
         """ROT-13 module settings."""
         if ctx.invoked_subcommand is None:
@@ -169,38 +167,27 @@ class Rot13(commands.Cog):
     @rot13set.command()
     @checks.mod_or_permissions(manage_guild=True)
     @commands.guild_only()
-    async def dmrot13(self, ctx, b : bool):
+    async def dm_rot13(self, ctx, b : bool = None):
         """Whether to automatically DM ROT-13'd text when a user reacts."""
+        if b is None:
+            b = not await self.config.guild(ctx.guild).on_react_deocde_dm()
         await self.config.guild(ctx.guild).on_react_decode_dm.set(b)
         await ctx.send("Set **DM ROT-13** setting for this server to: `{}`".format(b))
 
     @rot13set.command()
     @checks.mod_or_permissions(manage_guild=True)
     @commands.guild_only()
-    async def autoreact(self, ctx, b : bool):
-        """Whether to automatically react to messages containing the match text."""
-        await self.config.guild(ctx.guild).auto_react_enabled.set(b)
-        if b and not await self.config.guild(ctx.guild).match_text():
-            await self.config.guild(ctx.guild).match_text.set("rot13")
-            await ctx.send("Set **auto-react** setting for this server to: `{}` (reset **match text** string to `rot13`)".format(b))
-        else:
-            await ctx.send("Set **auto-react** setting for this server to: `{}`".format(b))
-
-    @rot13set.command()
-    @checks.mod_or_permissions(manage_guild=True)
-    @commands.guild_only()
-    async def matchtext(self, ctx, s : str = ""):
+    async def auto_react_match_text(self, ctx, s : str = ""):
         """The text to check for when DMing ROT-13 or automatically reacting."""
         if "@" in s:
             await ctx.send(error("You cannot use that match text."))
             return
 
-        await self.config.guild(ctx.guild).match_text.set(s)
+        await self.config.guild(ctx.guild).auto_react_to.set(s)
         if s:
-            await ctx.send(info("Set **match text** setting for this server to: `{}`".format(s)))
+            await ctx.send(info("If new user messages on this server match `{}`, I will add a reaction automatically.".format(s)))
         else:
-            await self.config.guild(ctx.guild).auto_react_enabled.set(False)
-            await ctx.send(info("Set **match text** setting for this server to any message (**auto-react** disabled).".format(s)))
+            await ctx.send(info("Disabled automatically reacting on this erver."))
 
     def _rot13(self, text):
         """Do ROT-13."""

@@ -939,7 +939,7 @@ class Wikia(commands.Cog):
         return fields
 
     @commands.group()
-    @checks.is_owner()
+    @checks.mod_or_permissions(manage_guild=True)
     async def wikiaset(self, ctx):
         """Wikia module settings."""
         if ctx.invoked_subcommand is None:
@@ -947,7 +947,7 @@ class Wikia(commands.Cog):
             return
 
     @wikiaset.command(name="default", aliases=["defaultwiki", "defaultwikia"])
-    @checks.is_owner()
+    @checks.mod_or_permissions(manage_guild=True)
     async def wikiaset_default(self, ctx, subdomain):
         """Set the default Wikia for this server."""
         if ctx.guild is None:
