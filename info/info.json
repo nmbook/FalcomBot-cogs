@@ -1,7 +1,0 @@
-{
-    "author": ["Ribose"],
-    "description": "Commands to request discord user, channel, server, role, emoji info.",
-    "short": "Commands to request various discord info.",
-    "tags": ["info", "utilities"]
-}
-
