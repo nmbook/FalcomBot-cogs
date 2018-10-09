@@ -13,7 +13,7 @@ class RoleRequests(commands.Cog):
                 "roles": [],
                 "max_requestable": 3,
                 "request_channel": 0,
-                "auto_post_list": False,
+                "auto_post_list": True,
         }
 
         default_channel = {
@@ -409,7 +409,7 @@ class RoleRequests(commands.Cog):
     @commands.guild_only()
     @checks.mod_or_permissions(manage_guild=True)
     async def request_channel(self, ctx, channel : discord.TextChannel = None):
-        """Where `[p]request list` commands say to use the `[p]request` command."""
+        """Where `[p]request list` commands say to use the `[p]request` command. Use the command without a channel argument to set to no channel."""
         if channel is None:
             channel_id = 0
         elif channel.guild != ctx.guild:
@@ -440,8 +440,10 @@ class RoleRequests(commands.Cog):
     @reqset.command(aliases=["auto_postlist"])
     @commands.guild_only()
     @checks.mod_or_permissions(manage_guild=True)
-    async def auto_post_list(self, ctx, val : bool):
+    async def auto_post_list(self, ctx, val : bool = None):
         """Whether to automatically update existing post_list posts when roles or counts change."""
+        if val is None:
+            val = not await self.config.guild(ctx.guild).auto_post_list()
         await self.config.guild(ctx.guild).auto_post_list.set(val)
         if val:
             await ctx.send(info("Will automatically update post_list posts."))
