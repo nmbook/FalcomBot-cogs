@@ -178,7 +178,7 @@ class Rot13(commands.Cog):
     @checks.mod_or_permissions(manage_guild=True)
     @commands.guild_only()
     async def auto_react_match_text(self, ctx, s : str = ""):
-        """The text to check for when DMing ROT-13 or automatically reacting."""
+        """Text to check for to automatically react, to allow users to one-click decode."""
         if "@" in s:
             await ctx.send(error("You cannot use that match text."))
             return

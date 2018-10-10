@@ -5,7 +5,7 @@ Useful utilities I created for the Falcom discord, but anyone can use these ones
 # Contents
 
 - Random Tools (`randt`): Commands for various randomization tasks.
-    - `[p]roll <dice>`
+    - `[p]rolldice <dice>`
     - `[p]choose <item> <item> ...`
     - `[p]choosex <n> <item> <item> ...`
     - `[p]drawx <n> <item> <item> ...`

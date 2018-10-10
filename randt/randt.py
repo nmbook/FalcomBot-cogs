@@ -27,7 +27,6 @@ class RandomizationTools(commands.Cog):
         """From a set of N items, choose X items and display them.
         
         This is random choosing with replacement, and is the same as using the "choose" command multiple times.
-
         To denote multiple-word items, use double quotes."""
         items = [escape(c, mass_mentions=True) for c in items]
         if x < 1:
@@ -42,7 +41,6 @@ class RandomizationTools(commands.Cog):
         """From a set of N items, draw X items and display them.
         
         This is random drawing without replacement.
-
         To denote multiple-word items, use double quotes."""
         items = [escape(c, mass_mentions=True) for c in items]
         if x < 1:
@@ -66,20 +64,15 @@ class RandomizationTools(commands.Cog):
             await ctx.send(info("A randomized order of {} items: {}".format(len(items), ", ".join(shuffle(items)))))
 
 
-    @commands.command()
-    async def roll(self, ctx, *bounds):
+    @commands.command(aliases=["dice"])
+    async def rolldice(self, ctx, *bounds):
         """Rolls the specified single or multiple dice.
         
         Possible arguments:
-
         NONE rolls a 6-sided die.
-        
         A single number X: rolls an X-sided die (example: ".roll 17").
-
         Two numbers X and Y: rolls a strange die with a minimum X and maximum Y (example: ".roll 3 8").
-
         The text NdX: rolls N dice with X sides (example: ".roll 3d20".
-
         The NdX "dice specification" can be repeated to roll a variety of dice at once. If multiple dice are used, statistics will be shown."""
         sbounds = " ".join(bounds).lower()
         if "d" in sbounds:
