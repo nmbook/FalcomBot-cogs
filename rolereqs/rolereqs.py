@@ -271,7 +271,7 @@ class RoleRequests(commands.Cog):
 
     def _get_role_styled(self, role_obj, *, show_stats=False):
         if role_obj.mentionable:
-            role_txt = "@{} [pingable]".format(escape(str(role_obj)))
+            role_txt = "@{} [pingable]".format(escape(str(role_obj), mass_mentions = True))
         else:
             role_txt = role_obj.mention
 

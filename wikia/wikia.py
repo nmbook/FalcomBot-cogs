@@ -94,10 +94,10 @@ class Wikia(commands.Cog):
                             fields['section_name_appender'],
                             fields['page_url'], 
                             fields['section_url'],
-                            fields['page_content'])))
+                            fields['page_content']), mass_mentions = True))
         except Exception as ex:
             print('Exception on ".wiki" command:\n{}\n'.format(traceback.format_exc()))
-            await ctx.send('*Error: An error occurred processing the Wikia API:* `{}`'.format(escape(str(ex))))
+            await ctx.send('*Error: An error occurred processing the Wikia API:* `{}`'.format(escape(str(ex), mass_mentions = True)))
 
 
     async def parse_search_terms(self, ctx, search_terms):
@@ -956,7 +956,7 @@ class Wikia(commands.Cog):
 
         if subdomain.replace('_', '').isalnum() and len(subdomain) > 2:
             await self.config.guild(ctx.guild).default_wikia.set(subdomain)
-            await ctx.send("The default Wikia for this server is now: <http://{}.wikia.com>".format(escape(subdomain)))
+            await ctx.send("The default Wikia for this server is now: <http://{}.wikia.com>".format(escape(subdomain, mass_mentions = True)))
         else:
             await ctx.send("That Wikia subdomain is not valid.")
 
