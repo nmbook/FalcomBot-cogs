@@ -1,7 +1,9 @@
 {
+    "name": "Text Tools",
     "author": ["Ribose"],
     "description": "Utility commands to encode and manipulate text.",
     "short": "Utility text commands.",
-    "tags": ["text", "encoding", "utilities"]
+    "tags": ["text", "encoding", "utilities"],
+    "install_msg": "Thank you for installing text encoding tools. See available commands with `[p]help TextTools`"
 }
 

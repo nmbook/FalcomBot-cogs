@@ -1,7 +1,9 @@
 {
+    "name": "Role Requests",
     "author": ["Ribose"],
     "description": "Allows users to request roles from a list set by the moderators.",
     "short": "Allows users to request roles.",
     "tags": ["roles", "utilities"]
+    "install_msg": "Thank you for installing role requests. Add requestable roles already on this server with `[p]req addrole`, and post the list to an announcement channel with `[p]req postlist`. See available subcommands with `[p]help request`"
 }
 

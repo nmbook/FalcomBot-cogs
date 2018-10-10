@@ -1,7 +1,9 @@
 {
+    "name": "Randomization Tools",
     "author": ["Ribose"],
     "description": "Utility commands to randomize things.",
     "short": "Utility randomization commands.",
-    "tags": ["randomization", "rng", "utilities"]
+    "tags": ["randomization", "rng", "utilities"],
+    "install_msg": "Thank you for installing the randomization tools. See available commands with `[p]help RandomizationTools`"
 }
 

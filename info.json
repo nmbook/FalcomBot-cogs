@@ -3,5 +3,6 @@
     "name" : "Falcogs",
     "short" : "Utilities for Falcom discord.",
     "description" : "Useful utilities I created for the Falcom discord, but anyone can use these ones here that are complete and functioning!",
-    "tags" : ["ribose"]
+    "tags" : ["ribose"],
+    "install_msg": "Thank you for installing! These are useful utilities I made, and I hope there's something for you, too. Submit issues to <https://github.com/nmbook/FalcomBot-cogs/issues> or message me privately on discord at **Ribose#1243**."
 }
