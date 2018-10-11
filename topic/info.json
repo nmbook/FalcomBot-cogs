@@ -1,0 +1,9 @@
+{
+    "name": "Topic",
+    "author": ["Ribose"],
+    "description": "View and edit topic command.",
+    "short": "View and edit topic command.",
+    "tags": ["channel", "topic", "utilities"],
+    "install_msg": "Thank you for installing Topic. Adds the `[p]topic` command. See more with `[p]help topic`"
+}
+
