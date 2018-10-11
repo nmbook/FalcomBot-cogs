@@ -133,7 +133,7 @@ class Rot13(commands.Cog):
             # this not is a DM or group DM
             message = ctx.message
             footer = "In channel #{channel} on {guild} at {time:%Y-%m-%d %H:%M} UTC".format(channel = ctx.channel, guild = message.guild, time = message.created_at)
-            with ctx.typing():
+            async with ctx.typing():
                 try:
                     await message.delete()
                 except (discord.Forbidden, discord.HTTPException):
