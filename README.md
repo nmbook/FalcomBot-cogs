@@ -6,9 +6,9 @@ Useful utilities I created for the Falcom discord, but anyone can use these ones
 
 - Topic (`topic`): A topic command for presenting the current topic to users, and setting the topic (allowing easier input of emojis and mentions).
     - `[p]topic [channel]`: Get channel topic. If omitted, use current channel.
-    - [mpd] `[p]topic set <channel> topic`: Set channel topic.
-    - [mpd] `[p]topic amend <channel> topic`: Amend to channel topic, placing new text after newline.
-    - [mpd] `[p]topic clear [channel]`: Clear channel topic. If omitted, use current channel.
+    - [mod] `[p]topic set <channel> topic`: Set channel topic.
+    - [mod] `[p]topic amend <channel> topic`: Amend to channel topic, placing new text after newline.
+    - [mod] `[p]topic clear [channel]`: Clear channel topic. If omitted, use current channel.
 
 - Random Tools (`randt`): Commands for various randomization tasks.
     - `[p]rolldice <dice>`
