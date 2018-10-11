@@ -3,7 +3,7 @@
     "author": ["Ribose"],
     "description": "ROT-13 command and allows users to react with :unlock: to ROT-13 quickly.",
     "short": "ROT-13 command and reaction system.",
-    "tags": ["rot13", "utilities"],
+    "tags": ["reactions", "rot13", "utilities"],
     "install_msg": "Thank you for installing ROT-13. Users may now react with :unlock: to decode ROT-13s immediately, or `[p]rot13` to encode. Configure the settings with `[p]rot13set`. See more with `[p]help rot13`"
 }
 
