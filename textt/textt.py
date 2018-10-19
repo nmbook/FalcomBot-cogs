@@ -132,8 +132,8 @@ class TextTools(commands.Cog):
             char = arg
         else:
             # try to find what character is meant
-            # if starts with "U+", it"s hex
-            if arg.upper().startswith("U+"):
+            # if starts with "U+", "\x", "\u", it"s hex
+            if arg.upper().startswith("U+") or arg.upper().startswith("\\U") or arg.upper().startswith("\\X"):
                 arg = "0x" + arg[2:].strip()
             try:
                 if arg.lower().startswith("0x"):
