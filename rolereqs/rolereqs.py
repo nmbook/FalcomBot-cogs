@@ -378,8 +378,7 @@ class RoleRequests(commands.Cog):
     @checks.mod_or_permissions(manage_guild=True)
     async def reqset(self, ctx):
         """Adjust [p]request command settings."""
-        if ctx.invoked_subcommand is None:
-            await ctx.send_help()
+        pass
 
     @reqset.command(aliases=["req_channel", "channel"])
     @commands.guild_only()
