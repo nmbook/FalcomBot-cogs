@@ -28,44 +28,10 @@ class RoleRequests(commands.Cog):
     
     @commands.group(aliases=["iam", "req"], invoke_without_command=True)
     @commands.guild_only()
-    async def request(self, ctx, *, role_name):#, *, raw_text):
+    async def request(self, ctx, *, role_name):
         """Requests access to a role."""
-        #if ctx.invoked_subcommand is None:
-        #    await ctx.send_help()
-        #"""Gives you a requestable role."""
-        # requestable list
-        role_subset = await self.config.guild(ctx.guild).roles()
-        max_requestable = await self.config.guild(ctx.guild).max_requestable()
+        await ctx.invoke(self.add, role_name=role_name)
 
-        # find matches
-        role_to_add = await self._find_role(ctx, role_name, role_subset=role_subset)
-        if role_to_add is None:
-            return
-
-        if role_to_add in ctx.author.roles:
-            await ctx.send(error("You already have the role `{}`.".format(role_to_add)))
-            return
-
-        if not role_to_add.id in role_subset:
-            await ctx.send(error("You cannot request `{}`.".format(role_to_add)))
-            return
-
-        count = 0
-        for role in ctx.author.roles:
-            if role.id in role_subset:
-                count += 1
-                if count >= max_requestable:
-                    cpl = ""
-                    if count != 1:
-                        cpl = "s"
-                    await ctx.send(error("You already have {} role{} that can be requested (max: {}). You may ask a moderator or you may remove a role with with `{}request rem NAME`.".format(count, cpl, max_requestable, ctx.prefix[0])))
-                    return
-
-        await ctx.author.add_roles(role_to_add)
-        if await self.config.guild(ctx.guild).auto_post_list():
-            await self._auto_post_list(ctx)
-        await ctx.send("Added {} to your roles.".format(self._get_role_styled(role_to_add, show_stats=True)))
-    
     @request.command()
     @commands.guild_only()
     async def list(self, ctx):
