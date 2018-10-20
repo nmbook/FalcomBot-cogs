@@ -89,7 +89,7 @@ class RoleRequests(commands.Cog):
         for role in ctx.author.roles:
             if role.id in role_subset:
                 count += 1
-                if count >= max_requestable:
+                if max_requestable >= 0 and count >= max_requestable:
                     cpl = ""
                     if count != 1:
                         cpl = "s"
@@ -398,20 +398,27 @@ class RoleRequests(commands.Cog):
         if await self.config.guild(ctx.guild).auto_post_list():
             await self._auto_post_list(ctx)
         if channel_id != 0:
-            await ctx.send(info("Set where to suggest using the `[p]request` commands in `[p]request list` to {}.".format(channel.mention)))
+            await ctx.send(info("The `[p]request list` response now suggests using the `[p]request` commands in {}.".format(channel.mention)))
         else:
-            await ctx.send(info("Set the `[p]request list` to not suggest a channel."))
+            await ctx.send(info("The `[p]request list` response no longer suggests a channel to use `[p]request` commands in."))
 
     @reqset.command(aliases=["max_req", "max"])
     @commands.guild_only()
     @checks.mod_or_permissions(manage_guild=True)
     async def max_requestable(self, ctx, count : int):
-        """Maximum number of roles that users can request."""
-        if count < 0:
+        """Maximum number of roles that users can request.
+        
+        If set to -1, there is no limit."""
+        if count < -1:
             await ctx.send(error("Maximum must not be negative."))
 
         await self.config.guild(ctx.guild).max_requestable.set(count)
-        await ctx.send(info("Set maximum number of requestable roles per user to {}.".format(count)))
+
+        if count == -1:
+            count_str = "unlimited"
+        else:
+            count_str = str(count)
+        await ctx.send(info("The maximum number of requestable roles per user is now {}.".format(count_str)))
 
     @reqset.command(aliases=["auto_postlist"])
     @commands.guild_only()
