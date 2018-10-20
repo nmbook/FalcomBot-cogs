@@ -14,6 +14,7 @@ class RoleRequests(commands.Cog):
                 "max_requestable": 3,
                 "request_channel": 0,
                 "auto_post_list": True,
+                "show_member_count": True,
         }
 
         default_channel = {
@@ -130,9 +131,9 @@ class RoleRequests(commands.Cog):
                     return
 
         await ctx.author.add_roles(role_to_add)
+        await ctx.send("Added {} to your roles.".format(await self._get_role_styled(ctx, role_to_add)))
         if await self.config.guild(ctx.guild).auto_post_list():
             await self._auto_post_list(ctx)
-        await ctx.send("Added {} to your roles.".format(self._get_role_styled(role_to_add, show_stats=True)))
 
     @request.command(aliases=["remove"])
     @commands.guild_only()
@@ -157,9 +158,9 @@ class RoleRequests(commands.Cog):
             return
 
         await ctx.author.remove_roles(role_to_add)
+        await ctx.send("Removed {} from your roles.".format(await self._get_role_styled(ctx, role_to_add)))
         if await self.config.guild(ctx.guild).auto_post_list():
             await self._auto_post_list(ctx)
-        await ctx.send("Removed {} from your roles.".format(self._get_role_styled(role_to_add, show_stats=True)))
 
     @request.command(aliases=["clr"])
     @commands.guild_only()
@@ -171,12 +172,12 @@ class RoleRequests(commands.Cog):
         role_count = len(role_objs)
         if role_count > 0:
             await ctx.author.remove_roles(*role_objs)
-            if await self.config.guild(ctx.guild).auto_post_list():
-                await self._auto_post_list(ctx)
             if role_count > 1:
                 await ctx.send("Removed {} of your roles.".format(role_count))
             else:
-                await ctx.send("Removed {} from your roles.".format(self._get_role_styled(role_objs[0], show_stats=True)))
+                await ctx.send("Removed {} from your roles.".format(await self._get_role_styled(ctx, role_objs[0])))
+            if await self.config.guild(ctx.guild).auto_post_list():
+                await self._auto_post_list(ctx)
         else:
             await ctx.send(error("You do not have any requestable roles to remove."))
 
@@ -192,13 +193,13 @@ class RoleRequests(commands.Cog):
 
         async with self.config.guild(ctx.guild).roles() as role_subset:
             if ctx.guild.id in role_subset:
-                await ctx.send(error("Role {} can already be requested.".format(self._get_role_styled(role_to_add, show_stats=True))))
+                await ctx.send(error("Role {} can already be requested.".format(await self._get_role_styled(ctx, role_to_add))))
                 return
 
             role_subset.append(role_to_add.id)
+            await ctx.send(info("Added {} to requestable roles list.".format(await self._get_role_styled(ctx, role_to_add))))
             if await self.config.guild(ctx.guild).auto_post_list():
                 await self._auto_post_list(ctx)
-            await ctx.send(info("Added {} to requestable roles list.".format(self._get_role_styled(role_to_add, show_stats=True))))
 
     @request.command(aliases=["removerole"])
     @commands.guild_only()
@@ -212,13 +213,13 @@ class RoleRequests(commands.Cog):
         
         async with self.config.guild(ctx.guild).roles() as role_subset:
             if not ctx.guild.id in role_subset:
-                await ctx.send(error("Role {} was already not requestable.".format(self._get_role_styled(role_to_add, show_stats=True))))
+                await ctx.send(error("Role {} was already not requestable.".format(await self._get_role_styled(ctx, role_to_add))))
                 return
 
             role_subset.remove(role_to_add.id)
+            await ctx.send(info("Removed {} from requestable roles list.".format(await self._get_role_styled(ctx, role_to_add))))
             if await self.config.guild(ctx.guild).auto_post_list():
                 await self._auto_post_list(ctx)
-            await ctx.send(info("Removed {} from requestable roles list.".format(self._get_role_styled(role_to_add, show_stats=True))))
 
     @request.command(aliases=["massapplyrole", "massapply"])
     @commands.guild_only()
@@ -259,27 +260,36 @@ class RoleRequests(commands.Cog):
                 await ctx.send(error("No users have participated in the last {} messages in {}.".format(n, channel.mention)))
             elif len(accounts) == 1:
                 await accounts[0].add_roles(role_to_add)
+                await ctx.send(info("Added {} to {}'s roles (only participant in the last {} messages in {}).".format(
+                        await self._get_role_styled(ctx, role_to_add),
+                        accounts[0], n, channel.mention)))
                 if await self.config.guild(ctx.guild).auto_post_list():
                     await self._auto_post_list(ctx)
-                await ctx.send(info("Added {} to {}'s roles (only participant in the last {} messages in {}).".format(self._get_role_styled(role_to_add, show_stats=True), accounts[0], n, channel.mention)))
             else:
                 for account in accounts:
                     await account.add_roles(role_to_add)
+                await ctx.send(info("Added {} to {} users' roles (participants in the last {} messages in {}).".format(
+                        await self._get_role_styled(ctx, role_to_add),
+                        len(accounts), n, channel.mention)))
                 if await self.config.guild(ctx.guild).auto_post_list():
                     await self._auto_post_list(ctx)
-                await ctx.send(info("Added {} to {} users' roles (participants in the last {} messages in {}).".format(self._get_role_styled(role_to_add, show_stats=True), len(accounts), n, channel.mention)))
 
-    def _get_role_styled(self, role_obj, *, show_stats=False):
+    async def _get_role_styled(self, ctx, role_obj):
         if role_obj.mentionable:
             role_txt = "@{} [pingable]".format(escape(str(role_obj), mass_mentions = True))
         else:
             role_txt = role_obj.mention
 
-        if show_stats:
-            color = ""
-            if role_obj.color != discord.Color.default() and role_obj.mentionable:
-                color = "{}; ".format(role_obj.color)
-            return "{} ({}{})".format(role_txt, color, len(role_obj.members))
+        show_color = (role_obj.color != discord.Color.default() and role_obj.mentionable)
+        show_member_count = await self.config.guild(ctx.guild).show_member_count()
+        if show_member_count or show_color:
+            parts = []
+            if show_member_count:
+                parts.append(str(len(role_obj.members)))
+            if show_color:
+                parts.append(str(role_obj.color))
+
+            return "{} ({})".format(role_txt, "; ".join(parts))
         else:
             return role_txt
 
@@ -302,7 +312,7 @@ class RoleRequests(commands.Cog):
                     if (n % 5) == 0:
                         msg += "\n"
                     n += 1
-                    msg += "{}  ".format(self._get_role_styled(role_obj, show_stats=True))
+                    msg += "{}  ".format(await self._get_role_styled(ctx, role_obj))
                     break
         
         if n == 0:
@@ -440,12 +450,39 @@ class RoleRequests(commands.Cog):
     @reqset.command(aliases=["auto_postlist"])
     @commands.guild_only()
     @checks.mod_or_permissions(manage_guild=True)
-    async def auto_post_list(self, ctx, val : bool = None):
-        """Whether to automatically update existing post_list posts when roles or counts change."""
-        if val is None:
-            val = not await self.config.guild(ctx.guild).auto_post_list()
-        await self.config.guild(ctx.guild).auto_post_list.set(val)
-        if val:
+    async def auto_post_list(self, ctx, value : bool = None):
+        """Whether to automatically update existing post_list posts when roles or counts change.
+
+        For value, pass in "true" or "false".
+        Omit the value to toggle."""
+        if value is None:
+            value = not await self.config.guild(ctx.guild).auto_post_list()
+
+        await self.config.guild(ctx.guild).auto_post_list.set(value)
+        if value:
             await ctx.send(info("Will automatically update post_list posts."))
         else:
             await ctx.send(info("Will not automatically update post_list posts."))
+
+    @reqset.command(aliases=["hide_member_count", "show_stats", "hide_stats"])
+    @commands.guild_only()
+    @checks.mod_or_permissions(manage_guild=True)
+    async def show_member_count(self, ctx, value : bool = None):
+        """Whether to show or hide the number of users who currently have the role in successful [p]request commands and the role list.
+        
+        For value, pass in "true" or "false".
+        Omit the value to toggle.
+        Using the aliases with "hide" at the start inverts the value passed in."""
+        if value is None:
+            value = not await self.config.guild(ctx.guild).show_member_count()
+        elif ctx.invoked_with.startswith("hide"):
+            value = not value
+
+        await self.config.guild(ctx.guild).show_member_count.set(value)
+        if value:
+            await ctx.send(info("Will show member count next to role displays."))
+        else:
+            await ctx.send(info("Will hide member count next to role displays."))
+
+        if await self.config.guild(ctx.guild).auto_post_list():
+            await self._auto_post_list(ctx)
