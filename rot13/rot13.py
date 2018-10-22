@@ -160,32 +160,32 @@ class Rot13(commands.Cog):
     @checks.mod_or_permissions(manage_guild=True)
     async def rot13set(self, ctx):
         """ROT-13 module settings."""
-        if ctx.invoked_subcommand is None:
-            await ctx.send_help()
-            return
+        pass
 
     @rot13set.command()
     @checks.mod_or_permissions(manage_guild=True)
     @commands.guild_only()
-    async def dm_rot13(self, ctx, b : bool = None):
-        """Whether to automatically DM ROT-13'd text when a user reacts."""
-        if b is None:
-            b = not await self.config.guild(ctx.guild).on_react_deocde_dm()
-        await self.config.guild(ctx.guild).on_react_decode_dm.set(b)
-        await ctx.send("Set **DM ROT-13** setting for this server to: `{}`".format(b))
+    async def dm_rot13(self, ctx, value : bool = None):
+        """Whether to automatically DM ROT-13'd text when a user reacts.
+        
+        Omit the value to toggle."""
+        if value is None:
+            value = not await self.config.guild(ctx.guild).on_react_deocde_dm()
+        await self.config.guild(ctx.guild).on_react_decode_dm.set(value)
+        await ctx.send(info("Set **DM ROT-13** setting for this server to: `{}`".format(value)))
 
     @rot13set.command()
     @checks.mod_or_permissions(manage_guild=True)
     @commands.guild_only()
-    async def auto_react_match_text(self, ctx, s : str = ""):
+    async def auto_react_match_text(self, ctx, match_text : str = ""):
         """Text to check for to automatically react, to allow users to one-click decode."""
-        if "@" in s:
+        if "@" in match_text:
             await ctx.send(error("You cannot use that match text."))
             return
 
-        await self.config.guild(ctx.guild).auto_react_to.set(s)
-        if s:
-            await ctx.send(info("If new user messages on this server match `{}`, I will add a reaction automatically.".format(s)))
+        await self.config.guild(ctx.guild).auto_react_to.set(match_text)
+        if match_text:
+            await ctx.send(info("If new user messages on this server match `{}`, I will add a reaction automatically.".format(match_text)))
         else:
             await ctx.send(info("Disabled automatically reacting on this erver."))
 
