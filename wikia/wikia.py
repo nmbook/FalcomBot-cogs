@@ -1,6 +1,6 @@
 import discord
 from redbot.core import commands, Config, checks
-from redbot.core.utils.chat_formatting import escape
+from redbot.core.utils.chat_formatting import escape, info, error
 import aiohttp
 import asyncio
 import os
@@ -88,7 +88,7 @@ class Wikia(commands.Cog):
                 await ctx.send(embed=embed)
             except Exception as ex:
                 print('Exception on sending discord.Embed:\n{}\n'.format(traceback.format_exc()))
-                await ctx.send(escape('*Error: An error occurred sending the "Embed":* `{}`\n**__{}__{}** (<{}{}>):\n\n{}'.format(
+                await ctx.send(escape('*Error: An error occurred sending the "Embed":* `{}`\nFalling back to legacy output.\n\n**__{}__{}** (<{}{}>):\n\n{}'.format(
                             str(ex),
                             fields['page_name'], 
                             fields['section_name_appender'],
@@ -97,7 +97,7 @@ class Wikia(commands.Cog):
                             fields['page_content']), mass_mentions = True))
         except Exception as ex:
             print('Exception on ".wiki" command:\n{}\n'.format(traceback.format_exc()))
-            await ctx.send('*Error: An error occurred processing the Wikia API:* `{}`'.format(escape(str(ex), mass_mentions = True)))
+            await ctx.send(escape(error('An error occurred processing the Wikia API: `{}`'.format(ex), mass_mentions = True)))
 
 
     async def parse_search_terms(self, ctx, search_terms):
@@ -124,12 +124,12 @@ class Wikia(commands.Cog):
                 search_terms = search_terms[search_start:].strip(' <>:\t\n')
         else:
             if ctx.guild is None:
-                await ctx.send('*Error: You cannot set a default Wikia in private messages with me. You must use the command with a `-w`/`-wiki` parameter that specifies the Wikia to use.*')
+                await ctx.send(error('You cannot set a default Wikia in private messages with me. You must use the command with a `-w`/`-wiki` parameter that specifies the Wikia to use.'))
                 return None, None, None
 
             wikia = await self.config.guild(ctx.guild).default_wikia()
             if wikia is None or len(wikia) < 2:
-                await ctx.send('*Error: No default Wikia has been set for this server. You must use the command with a `-w`/`-wiki` parameter that specifies the Wikia to use.*')
+                await ctx.send(error('No default Wikia has been set for this server. You must use the command with a `-w`/`-wiki` parameter that specifies the Wikia to use.*'))
                 return None, None, None
 
         if '#' in search_terms:
@@ -312,6 +312,7 @@ class Wikia(commands.Cog):
         return None
 
     def wikia_links(self, base_url, link_array, strip_ns = False):
+        """Convert the list of links into a list of formatted [TEXT](URL) strings."""
         result = []
         for link in link_array:
             ns = self.wikia_get_namespace(link)
@@ -322,6 +323,7 @@ class Wikia(commands.Cog):
         return self.cut(', '.join(result), 1000)
 
     def wikia_sort_category_members(self, members):
+        """Sort categories into alphabetical buckets like Wikia does."""
         buckets = {}
         for member in members:
             found = False
@@ -498,6 +500,7 @@ class Wikia(commands.Cog):
             return False
 
     def wikia_get_namespace(self, page_name):
+        """Retrieve the namespace of a link."""
         if page_name.find(':', 2) > 1:
             return page_name[:page_name.find(':', 2)]
         else:
@@ -565,6 +568,7 @@ class Wikia(commands.Cog):
         return content
 
     def get_wikia_color(self, wikia):
+        """Get (hardcoded) color for this subdomain."""
         wikia = wikia.lower()
         if wikia == 'kiseki':
             return 0x005a73
@@ -579,10 +583,10 @@ class Wikia(commands.Cog):
         elif wikia == 'onehundredpercentorangejuice':
             return 0xfe7e03
         else:
-            return 0x000000
+            return None
 
     def entity_replace(self, content):
-        # replace wiki format with markdown format (by going to HTML)
+        """Replace Wikia format for simple styles with the equivalent Markdown."""
         rwf_data = [
                 {'find': "'''''", 'replace': '***'},
                 {'find': "'''", 'replace': '**'},
@@ -599,6 +603,9 @@ class Wikia(commands.Cog):
         return content
 
     def wikia_parse_content_automata(self, page_content, base_url, *, no_link_urls=False):
+        """Parse content by finding complex formatting objects and generating links lists, stripping templates, and other related tasks.
+
+        Don't look at this function, it's ugly."""
         page_content = self.entity_replace(page_content)
 
         # parse links, templates, etc
@@ -942,22 +949,20 @@ class Wikia(commands.Cog):
     @checks.mod_or_permissions(manage_guild=True)
     async def wikiaset(self, ctx):
         """Wikia module settings."""
-        if ctx.invoked_subcommand is None:
-            await ctx.send_help()
-            return
+        pass
 
     @wikiaset.command(name="default", aliases=["defaultwiki", "defaultwikia"])
     @checks.mod_or_permissions(manage_guild=True)
     async def wikiaset_default(self, ctx, subdomain):
         """Set the default Wikia for this server."""
         if ctx.guild is None:
-            await ctx.send('*Error: You cannot set a default Wikia in private messages with me. Use the `wikiaset default` command in a server.*')
+            await ctx.send(error('You cannot set a default Wikia in private messages with me. Use the `wikiaset default` command in a server.'))
             return
 
         if subdomain.replace('_', '').isalnum() and len(subdomain) > 2:
             await self.config.guild(ctx.guild).default_wikia.set(subdomain)
-            await ctx.send("The default Wikia for this server is now: <http://{}.wikia.com>".format(escape(subdomain, mass_mentions = True)))
+            await ctx.send(info("The default Wikia for this server is now: <http://{}.wikia.com>".format(escape(subdomain, mass_mentions = True))))
         else:
-            await ctx.send("That Wikia subdomain is not valid.")
+            await ctx.send(error("That Wikia subdomain is not valid."))
 
 
