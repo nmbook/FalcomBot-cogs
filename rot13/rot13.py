@@ -52,7 +52,7 @@ class Rot13(commands.Cog):
         if settings["on_react_decode_dm"] and len(settings["auto_react_to"]) > 0:
             # do we need to add reaction?
             if settings["auto_react_to"] and \
-                    settings["auto_react_to"] in message.clean_content:
+                    settings["auto_react_to"].casefold() in message.clean_content.casefold():
                 # if TEXT is not None and TEXT is present, do reaction
                 await message.add_reaction(settings["react"])
 
