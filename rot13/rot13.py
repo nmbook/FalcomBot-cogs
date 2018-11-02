@@ -54,13 +54,16 @@ class Rot13(commands.Cog):
             if settings["auto_react_to"] and \
                     settings["auto_react_to"].casefold() in message.clean_content.casefold():
                 # if TEXT is not None and TEXT is present, do reaction
-                await message.add_reaction(settings["react"])
+                try:
+                    await message.add_reaction(settings["react"])
+                except (discord.NotFound, discord.Forbidden, discord.HTTPException):
+                    pass
 
     async def on_raw_reaction_add(self, payload):
         """Handle on_raw_reaction_add: DM result of ROT-13 if settings permit."""
         user    = self.bot.get_user(payload.user_id)
         if user is None:
-            # user could not be found and cannot be DMed
+            # user could not be found and cannot be DMd
             return
         channel = self.bot.get_channel(payload.channel_id)
         if channel is None:
