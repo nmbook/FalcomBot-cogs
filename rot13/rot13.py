@@ -77,17 +77,17 @@ class Rot13(commands.Cog):
 
         if   isinstance(channel, discord.TextChannel):
             settings = await self.config.guild(message.guild).all()
-            footer = "In channel #{channel} on {guild} at {time:%Y-%m-%d %H:%M} UTC".format(channel = channel, guild = message.guild, time = message.created_at)
+            footer = "In channel #{channel} on {guild}".format(channel = channel, guild = message.guild)
         elif isinstance(channel, discord.DMChannel):
             settings = await self.config.all()
-            footer = "At {time:%Y-%m-%d %H:%M} UTC".format(time = message.created_at)
+            footer = ""
         elif isinstance(channel, discord.GroupChannel):
             settings = await self.config.all()
             if "name" in channel and len(channel.name):
                 name = "group chat {}".format(channel.name)
             else:
-                name = "a group chat with {n} members ({list})".format(n = len(channel.list), list = ", ".join([x.display_name for x in channel.list if x != user]))
-            footer = "In group chat {name} at {time:%Y-%m-%d %H:%M} UTC".format(name = name, time = message.created_at)
+                name = "a group chat with {n} members ({list})".format(n = len(channel.list), list = ", ".join([x.display_name for x in channel.list if x.id != user.id]))
+            footer = "In group chat {name}".format(name = name)
         else:
             # unknown and unsupported channel type
             return
@@ -122,7 +122,8 @@ class Rot13(commands.Cog):
                 embed.set_author(name=message.author.display_name)
                 embed.set_thumbnail(url=message.author.avatar_url)
                 embed.set_footer(text=footer)
-                #await user.send(content=self._rot13(message.clean_content))
+                embed.timestamp = message.created_at
+                #await message.author.send(content=self._rot13(message.clean_content))
                 try:
                     await user.send(embed=embed)
                 except (discord.Forbidden, discord.HTTPException):
@@ -135,7 +136,7 @@ class Rot13(commands.Cog):
         if isinstance(ctx.channel, discord.TextChannel):
             # this not is a DM or group DM
             message = ctx.message
-            footer = "In channel #{channel} on {guild} at {time:%Y-%m-%d %H:%M} UTC".format(channel = ctx.channel, guild = message.guild, time = message.created_at)
+            footer = "In channel #{channel} on {guild}".format(channel = ctx.channel, guild = message.guild)
             async with ctx.typing():
                 try:
                     await message.delete()
@@ -150,6 +151,7 @@ class Rot13(commands.Cog):
                 embed.set_author(name=message.author.display_name)
                 embed.set_thumbnail(url=message.author.avatar_url)
                 embed.set_footer(text=footer)
+                embed.timestamp = message.created_at
                 #await user.send(content=self._rot13(message.clean_content))
                 try:
                     await ctx.send(embed=embed)
