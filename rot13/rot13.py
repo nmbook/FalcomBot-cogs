@@ -21,6 +21,8 @@ class Rot13(commands.Cog):
         self.config.register_global(**Rot13.guild_conf)
         self.config.register_guild(**Rot13.guild_conf)
 
+        #self.embed_cache = []
+
     async def on_message(self, message):
         """Handle on_message: Add auto-reaction if settings permit."""
         if not isinstance(message.channel, discord.TextChannel):
@@ -92,15 +94,27 @@ class Rot13(commands.Cog):
             # unknown and unsupported channel type
             return
 
+        if user.id == self.bot.user.id:
+            # this is our reaction, discard early
+            return
+
+        if user.bot:
+            # this reaction is a bot, discard early
+            return
+
+        #if message.id in self.embed_cache:
+        #    # this is an embed we made from [p]rot13, let's skip the other checks
+        #    content = message.embed.description
+        #else:
         if message.type != discord.MessageType.default:
             # this is a system message, discard early
             return
 
-        if message.author.id == self.bot.user.id or user.id == self.bot.user.id:
-            # this is ours or our reaction, discard early
+        if message.author.id == self.bot.user.id:
+            # this is our message, discard early
             return
         
-        if message.author.bot or user.bot:
+        if message.author.bot:
             # this is a bot or a bot's reaction, discard early
             return
 
@@ -113,10 +127,12 @@ class Rot13(commands.Cog):
                     # starts with prefix, ignore command here
                     return
 
+        content = message.clean_content
+
         if settings["on_react_decode_dm"]:
             # do we need to send a message?
             if settings["react"] == str(payload.emoji):
-                embed = discord.Embed(description=self._rot13(message.clean_content))
+                embed = discord.Embed(description=self._rot13(content))
                 if message.author.color != discord.Color.default():
                     embed.color = message.author.color
                 embed.set_author(name=message.author.display_name)
@@ -135,28 +151,38 @@ class Rot13(commands.Cog):
         """Encodes text using ROT-13."""
         if isinstance(ctx.channel, discord.TextChannel):
             # this not is a DM or group DM
-            message = ctx.message
-            footer = "In channel #{channel} on {guild}".format(channel = ctx.channel, guild = message.guild)
-            async with ctx.typing():
-                try:
-                    await message.delete()
-                except (discord.Forbidden, discord.HTTPException):
-                    # permissions to delete here denied
-                    await ctx.send(content=error("This is a public location and I do not have permission to delete your message!"))
-                    return
+            #message = ctx.message
+            #footer = "In channel #{channel} on {guild}".format(channel = ctx.channel, guild = message.guild)
+            #async with ctx.typing():
+            await ctx.send(content=error("This is a server channel. The ROT-13 command is supported for direct messages only. The purpose is to make an encoded message."))
+               #try:
+               #    await message.delete()
+               #except (discord.Forbidden, discord.HTTPException):
+               #    # permissions to delete here denied
+               #    await ctx.send(content=error("This is a public location and I do not have permission to delete your message!"))
+               #    return
 
-                embed = discord.Embed(description=self._rot13(text))
-                if message.author.color != discord.Color.default():
-                    embed.color = message.author.color
-                embed.set_author(name=message.author.display_name)
-                embed.set_thumbnail(url=message.author.avatar_url)
-                embed.set_footer(text=footer)
-                embed.timestamp = message.created_at
-                #await user.send(content=self._rot13(message.clean_content))
-                try:
-                    await ctx.send(embed=embed)
-                except (discord.Forbidden, discord.HTTPException):
-                    await ctx.send(content=error("This is a public location and I do not have the ability to post an embed!"))
+               #embed = discord.Embed(description=self._rot13(text))
+               #if message.author.color != discord.Color.default():
+               #    embed.color = message.author.color
+               #embed.set_author(name=message.author.display_name)
+               #embed.set_thumbnail(url=message.author.avatar_url)
+               #embed.set_footer(text=footer)
+               #embed.timestamp = message.created_at
+               ##await user.send(content=self._rot13(message.clean_content))
+               #try:
+               #    post = await ctx.send(embed=embed)
+               #except (discord.Forbidden, discord.HTTPException):
+               #    await ctx.send(content=error("This is a public location and I do not have the ability to post an embed!"))
+               #    return
+
+               #self.embed_cache.append(int(message.id))
+
+               #settings = await self.config.guild(message.guild).all()
+               #try:
+               #    await post.add_reaction(settings["react"])
+               #except (discord.NotFound, discord.Forbidden, discord.HTTPException):
+               #    pass
         else:
             # private location: only reply with text
             await ctx.send(content=self._rot13(text))
