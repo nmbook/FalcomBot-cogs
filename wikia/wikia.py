@@ -97,7 +97,7 @@ class Wikia(commands.Cog):
                             fields["page_content"]), mass_mentions = True))
         except Exception as ex:
             print("Exception in [p]wiki command:\n{}\n".format(traceback.format_exc()))
-            await ctx.send(escape(error("An error occurred processing the Wikia API: `{}`".format(ex), mass_mentions = True)))
+            await ctx.send(escape(error("An error occurred processing the Wikia API: `{}`".format(ex)), mass_mentions = True))
 
 
     async def parse_search_terms(self, ctx, search_terms):
