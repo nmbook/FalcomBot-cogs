@@ -122,14 +122,17 @@ class Wikia(commands.Cog):
             if search_terms.startswith("wiki/") or search_terms.startswith("w/"):
                 search_start = search_terms.find("/") + 1
                 search_terms = search_terms[search_start:].strip(" <>:\t\n")
+            if not self.wikia_is_valid_subdomain(wikia):
+                await ctx.send(error("That Wikia subdomain is not valid."))
+                return None, None, None
         else:
             if ctx.guild is None:
-                await ctx.send(error("You cannot set a default Wikia in private messages with me. You must use the command with a `-w`/`-wiki` parameter that specifies the Wikia to use."))
+                await ctx.send(error("Because you cannot set a default Wikia in private messages with me, you must use this command with a `-w`/`-wiki` parameter that specifies the Wikia to use."))
                 return None, None, None
 
             wikia = await self.config.guild(ctx.guild).default_wikia()
-            if wikia is None or len(wikia) < 2:
-                await ctx.send(error("No default Wikia has been set for this server. You must use the command with a `-w`/`-wiki` parameter that specifies the Wikia to use.*"))
+            if wikia is None or not self.wikia_is_valid_subdomain(wikia):
+                await ctx.send(error("No default Wikia has been set for this server. You must use this command with a `-w`/`-wiki` parameter that specifies the Wikia to use.*"))
                 return None, None, None
 
         if "#" in search_terms:
@@ -509,6 +512,11 @@ class Wikia(commands.Cog):
             return page_name[:page_name.find(":", 2)]
         else:
             return ""
+
+    def wikia_is_valid_subdomain(self, subdomain):
+        return subdomain[0].isalnum() and \
+                ((subdomain[1:].replace("-", "").isalnum() and len(subdomain) > 1) or \
+                len(subdomain) == 1)
 
     def wikia_parse_link(self, page_content, start, end, bracket_depth):
         """Parses a link in a Wikia page into destination, text, and namespace."""
@@ -967,9 +975,9 @@ class Wikia(commands.Cog):
             await ctx.send(error("You cannot set a default Wikia in private messages with me. Use the `wikiaset default` command in a server."))
             return
 
-        if subdomain.replace("_", "").isalnum() and len(subdomain) > 2:
-            await self.config.guild(ctx.guild).default_wikia.set(subdomain)
-            await ctx.send(info("The default Wikia for this server is now: <http://{}.wikia.com>".format(escape(subdomain, mass_mentions = True))))
+        if self.wikia_is_valid_subdomain(subdomain):
+            await self.config.guild(ctx.guild).default_wikia.set(subdomain.lower())
+            await ctx.send(info("The default Wikia for this server is now: <http://{}.wikia.com>".format(escape(subdomain.lower(), mass_mentions = True))))
         else:
             await ctx.send(error("That Wikia subdomain is not valid."))
 
