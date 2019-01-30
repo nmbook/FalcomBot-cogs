@@ -372,8 +372,10 @@ class Wikia(commands.Cog):
         data = discord.Embed(
             title=title,
             url=kwargs["page_url"] + kwargs["section_url"],
-            description=description,
-            colour=discord.Colour(value=self.get_wikia_color(wikia)))
+            description=description)
+        color = self.get_wikia_color(wikia)
+        if color:
+            data.color = discord.Color(value=self.get_wikia_color(wikia))
 
         # category results
         if "cat_subcats" in kwargs:
