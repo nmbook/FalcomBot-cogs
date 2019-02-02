@@ -69,10 +69,9 @@ class Wikia(commands.Cog):
                 if fields["namespace"] == "File" or fields["namespace"] == "Image":
                     #print(page_name)
                     fields["im_details"]        = await self.mw_api_get_image_info(subdomain, page_name, thumb_width = None)
-                elif "first_image" in fields:
-                    if not fields["first_image"] is None:
-                        #print(fields["first_image"][0])
-                        fields["im_details"]    = await self.mw_api_get_image_info(subdomain, fields["first_image"][0], thumb_width = None)
+                elif "first_image" in fields and not fields["first_image"] is None:
+                    #print(fields["first_image"][0])
+                    fields["im_details"]        = await self.mw_api_get_image_info(subdomain, fields["first_image"][0], thumb_width = None)
                     #fields["im_serving"]        = await self.mw_api_get_image_serving_image(subdomain, page_name)
 
             if fields["namespace"] == "Category":
@@ -328,6 +327,25 @@ class Wikia(commands.Cog):
             result.append("[{}]({})".format(link, dest.replace(" ", "_").replace(")", "\\)")))
         return self.cut(", ".join(result), 1024)
 
+    def mw_format_size(self, sz, w, h):
+        """Return a human readable byte, width, and height size value on wiki media (images)."""
+        int_sz = sz
+        sz_mags = ["bytes", "KB", "MB", "GB", "TB"]
+        sz_mag = 0
+        sz_fmt = "{:,d}"
+        while True:
+            str_sz = "{} {}".format(sz_fmt, sz_mags[sz_mag]).format(int_sz)
+            if int_sz <= 1024 or sz_mag + 1 >= len(sz_mags):
+                break
+            int_sz /= 1024
+            sz_mag += 1
+            sz_fmt = "{:,.1f}"
+
+        if w and h:
+            str_sz += " | {}×{}".format(w, h)
+
+        return str_sz
+
     def mw_sort_category_members(self, members):
         """Sort categories into alphabetical buckets like wikis do."""
         buckets = {}
@@ -424,19 +442,12 @@ class Wikia(commands.Cog):
                 # was a directly requested image
                 #print(kwargs["im_details"]["url"])
                 data.set_image(url=kwargs["im_details"]["url"])
-                if "size" in kwargs["im_details"]:
-                    w_h = ""
+                if not ("first_image" in kwargs and not kwargs["first_image"] is None) and "size" in kwargs["im_details"] and not kwargs["im_details"]["size"] is None:
+                    sz, w, h = kwargs["im_details"]["size"], None, None
                     if "width" in kwargs["im_details"] and "height" in kwargs["im_details"]:
-                        w_h = " | {}×{}".format(kwargs["im_details"]["width"], kwargs["im_details"]["height"])
-                    sz_i = kwargs["im_details"]["size"]
-                    sz = "{:,d} bytes".format(sz_i)
-                    if sz_i > 1024:
-                        sz_i = sz_i / 1024
-                        sz = "{:,.1f} KB".format(sz_i)
-                        if sz_i > 1024:
-                            sz_i = sz_i / 1024
-                            sz = "{:,.1f} MB".format(sz_i)
-                    data.add_field(name="Size", value="{}{}".format(sz, w_h))
+                        w, h = kwargs["im_details"]["width"], kwargs["im_details"]["height"]
+
+                    data.add_field(name="Size", value=self.mw_format_size(sz, w, h))
 
         # last edit data
         if edit_detail:
@@ -482,7 +493,7 @@ class Wikia(commands.Cog):
             caption_p, _ = self.mw_parse_content_automata(kwargs["first_image_caption"], kwargs["base_url"])
             data.add_field(name=self.cut("{}".format(kwargs["first_image"][0].replace("_", " ")), 256, 10), value=self.cut(caption_p, 1024, 10))
             #footer_fields.append("Image is "{}" with caption "{}"".format(kwargs["first_image"][0].replace("_", " "), caption_p))
-        elif "im_details" in kwargs and "thumburl" in kwargs["im_details"]:
+        elif "first_image" in kwargs and not kwargs["first_image"] is None:
             data.add_field(name=self.cut("{}".format(kwargs["first_image"][0].replace("_", " ")), 256, 10), value="*No caption provided.*")
 
         data.set_author(name="{} Wiki".format(kwargs["subdomain"].title()), url="{}Main_Page".format(kwargs["base_url"]))
@@ -949,7 +960,7 @@ class Wikia(commands.Cog):
                 fic_parts = fields["first_image"][1].split("|")
                 fic_result = ""
                 options = True
-                for part in fic_parts:
+                for part in fic_parts[1:]:
                     if options and match_file_options.match(part):
                         pass
                     else:
