@@ -3,6 +3,7 @@ from redbot.core import commands, Config, checks
 from redbot.core.utils.chat_formatting import escape, info, error
 import aiohttp
 import asyncio
+import datetime
 import os
 import re
 import string
@@ -486,6 +487,7 @@ class Wikia(commands.Cog):
 
         data.set_author(name="{} Wiki".format(kwargs["subdomain"].title()), url="{}Main_Page".format(kwargs["base_url"]))
         data.set_footer(text="Requested by {}".format(ctx.message.author))
+        data.timestamp = datetime.datetime.utcnow()
         #print(data.to_dict())
         return data
     
