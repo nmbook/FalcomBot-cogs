@@ -30,7 +30,7 @@ class Wikia(commands.Cog):
         self.http_client = aiohttp.ClientSession()
 
     def __unload(self):
-        self.http_client.close()
+        self.bot.loop.create_task(self.http_client.close())
 
     @commands.command(aliases=["wiki", "wikia"])
     async def fandom(self, ctx, *, search_terms : str):
@@ -71,7 +71,7 @@ class Wikia(commands.Cog):
                 elif "first_image" in fields:
                     if not fields["first_image"] is None:
                         #print(fields["first_image"][0])
-                        fields["im_details"]    = await self.mw_api_get_image_info(subdomain, fields["first_image"][0], thumb_width = 512)
+                        fields["im_details"]    = await self.mw_api_get_image_info(subdomain, fields["first_image"][0], thumb_width = None)
                     #fields["im_serving"]        = await self.mw_api_get_image_serving_image(subdomain, page_name)
 
             if fields["namespace"] == "Category":
@@ -451,7 +451,7 @@ class Wikia(commands.Cog):
                 edit_f = " [{}] ".format(edit_detail["flags"])
             if "comment" in edit_detail and len(edit_detail["comment"]) > 0:
                 edit_c_p, _ = self.mw_parse_content_automata(edit_detail["comment"], kwargs["base_url"], no_link_urls=True)
-                edit_c = " ({})".format(edit_c_p)
+                edit_c = " ({})".format(edit_c_p.strip())
             edit = "Last edited {} by {}{}{}".format(edit_t, edit_u, edit_f, edit_c)
             data.add_field(name="Last edit", value=edit)
             #footer_fields.append(edit)
@@ -479,10 +479,10 @@ class Wikia(commands.Cog):
         # image caption
         if "first_image_caption" in kwargs and len(kwargs["first_image_caption"].strip()) > 0:
             caption_p, _ = self.mw_parse_content_automata(kwargs["first_image_caption"], kwargs["base_url"])
-            data.add_field(name=self.cut("{}".format(kwargs["first_image"][0].replace("_", " ")), 25, 10), value=caption_p)
+            data.add_field(name=self.cut("{}".format(kwargs["first_image"][0].replace("_", " ")), 256, 10), value=self.cut(caption_p, 1024, 10))
             #footer_fields.append("Image is "{}" with caption "{}"".format(kwargs["first_image"][0].replace("_", " "), caption_p))
         elif "im_details" in kwargs and "thumburl" in kwargs["im_details"]:
-            data.add_field(name=self.cut("{}".format(kwargs["first_image"][0].replace("_", " ")), 25, 10), value="*No caption provided.*")
+            data.add_field(name=self.cut("{}".format(kwargs["first_image"][0].replace("_", " ")), 256, 10), value="*No caption provided.*")
 
         data.set_author(name="{} Wiki".format(kwargs["subdomain"].title()), url="{}Main_Page".format(kwargs["base_url"]))
         data.set_footer(text="Requested by {}".format(ctx.message.author))
@@ -559,6 +559,7 @@ class Wikia(commands.Cog):
         """Cuts off text after a given length, preferring a certain "word length"."""
         # loop after possible modification
         #input_content_length = str(len(content))
+        content = content.strip()
         cut_point = 0
         prev_cut_point = 0
         pos = 0
@@ -928,7 +929,7 @@ class Wikia(commands.Cog):
         fields["page_content"] = self.cut(fields["page_content"], 2048)
         if not section_name is None and len(section_name) > 0:
             if section_found:
-                fields["section_name"]    = self.cut(section_name, 25, 10)
+                fields["section_name"]    = self.cut(section_name, 256, 10)
                 fields["section_content"] = self.cut(sect_content, 1024)
             else:
                 fields["section_name"]  = None
