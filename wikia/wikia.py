@@ -17,7 +17,7 @@ match_file_options = re.compile("|".join(["border", "frameless", "frame", "thumb
                         "link=.*", "alt=.*", "page=.*", "class=.*", "lang=.*"]))
 
 class Wikia(commands.Cog):
-    """Command to view Wikia pages."""
+    """Command to view FANDOM Wiki pages."""
 
     def __init__(self, bot):
         default_guild = {
@@ -32,31 +32,31 @@ class Wikia(commands.Cog):
     def __unload(self):
         self.http_client.close()
 
-    @commands.command(aliases=["wiki"])
-    async def wikia(self, ctx, *, search_terms : str):
-        """Wikia lookup. Finds a Wikia page by name and displays it with formatting and images.
+    @commands.command(aliases=["wiki", "wikia"])
+    async def fandom(self, ctx, *, search_terms : str):
+        """FANDOM Wiki lookup. Finds a wiki page by name and displays it with formatting and images.
         
-        Specify the Wikia to use (if it's different from the default one set for this server) by typing "-w" followed by the Wikia subdomain anywhere in the command.
+        Specify the wiki to use (if it's different from the default one set for this server) by typing "-w" followed by the wiki subdomain anywhere in the command.
         
         Alternatively, you may use a complete URL to an article to view the text and formatting on that page. Enclose it with <>s to avoid your own message generating a preview."""
 
         try:
-            wikia, page_name, section_name  = await self.parse_search_terms(ctx, search_terms)
-            if wikia is None:
+            subdomain, page_name, section_name  = await self.parse_search_terms(ctx, search_terms)
+            if subdomain is None:
                 return
 
             fields = {}
             fields["search_state"] = "title"
-            result, fields                  = await self.wikia_api_get_page_content(wikia, page_name, section_name, search_fields=fields)
+            result, fields                  = await self.mw_api_get_page_content(subdomain, page_name, section_name, search_fields=fields)
             if not result and fields["namespace"] != "Category":
                 fields["search_state"] = "fuzzy"
                 fields["search_input"] = page_name
                 fields["search_results"], \
-                  fields["search_warnings"] = await self.wikia_api_search_pages(wikia, page_name, "fuzzy", 10)
+                  fields["search_warnings"] = await self.mw_api_search_pages(subdomain, page_name, "fuzzy", 10)
 
                 #print(str(fields["search_results"]))
                 if fields["search_results"] and len(fields["search_results"]) == 1:
-                    result, fields          = await self.wikia_api_get_page_content(wikia, fields["search_results"][0], section_name, search_fields=fields)
+                    result, fields          = await self.mw_api_get_page_content(subdomain, fields["search_results"][0], section_name, search_fields=fields)
                     if not result:
                         fields["search_state"] = "error_given_result_failed"
                 elif fields["search_results"] and len(fields["search_results"]) > 1:
@@ -67,22 +67,22 @@ class Wikia(commands.Cog):
             if result:
                 if fields["namespace"] == "File" or fields["namespace"] == "Image":
                     #print(page_name)
-                    fields["im_details"]        = await self.wikia_api_get_image_info(wikia, page_name, thumb_width = None)
+                    fields["im_details"]        = await self.mw_api_get_image_info(subdomain, page_name, thumb_width = None)
                 elif "first_image" in fields:
                     if not fields["first_image"] is None:
                         #print(fields["first_image"][0])
-                        fields["im_details"]    = await self.wikia_api_get_image_info(wikia, fields["first_image"][0], thumb_width = 512)
-                    #fields["im_serving"]        = await self.wikia_api_get_image_serving_image(wikia, page_name)
+                        fields["im_details"]    = await self.mw_api_get_image_info(subdomain, fields["first_image"][0], thumb_width = 512)
+                    #fields["im_serving"]        = await self.mw_api_get_image_serving_image(subdomain, page_name)
 
             if fields["namespace"] == "Category":
                 fields["cat_members"], \
-                      fields["cat_subcats"] = await self.wikia_api_get_category_members(wikia, page_name, 100)
+                      fields["cat_subcats"] = await self.mw_api_get_category_members(subdomain, page_name, 100)
                 if len(fields["cat_members"]) == 0 and len(fields["cat_subcats"]) == 0 and not result:
                     fields["search_state"] = "error_no_category"
                     del fields["cat_members"]
                     del fields["cat_subcats"]
 
-            embed = self.wikia_embed_output(ctx, **fields)
+            embed = self.mw_embed_output(ctx, **fields)
 
             try:
                 await ctx.send(embed=embed)
@@ -97,11 +97,11 @@ class Wikia(commands.Cog):
                             fields["page_content"]), mass_mentions = True))
         except Exception as ex:
             print("Exception in [p]wiki command:\n{}\n".format(traceback.format_exc()))
-            await ctx.send(escape(error("An error occurred processing the Wikia API: `{}`".format(ex)), mass_mentions = True))
+            await ctx.send(escape(error("An error occurred processing the FANDOM Wiki API: `{}`".format(ex)), mass_mentions = True))
 
 
     async def parse_search_terms(self, ctx, search_terms):
-        """Parses the search terms into "wikia", "page_name", and "section_name" parts."""
+        """Parses the search terms into "subdomain", "page_name", and "section_name" parts."""
         search_terms = search_terms.strip(" <>:\t\n")
         if search_terms.lower().startswith("http://") or search_terms.lower().startswith("https://") or search_terms.startswith("//"):
             subd_start = search_terms.find("/") + 2
@@ -117,52 +117,52 @@ class Wikia(commands.Cog):
             search_start = 0
 
         if subd_end >= 0 and subd_start >= 0:
-            wikia = search_terms[subd_start:subd_end]
+            subdomain = search_terms[subd_start:subd_end]
             search_terms = search_terms[search_start:].strip(" <>:\t\n")
             if search_terms.startswith("wiki/") or search_terms.startswith("w/"):
                 search_start = search_terms.find("/") + 1
                 search_terms = search_terms[search_start:].strip(" <>:\t\n")
-            if not self.wikia_is_valid_subdomain(wikia):
-                await ctx.send(error("That Wikia subdomain is not valid."))
+            if not self.is_valid_subdomain(subdomain):
+                await ctx.send(error("That subdomain is not valid."))
                 return None, None, None
         else:
             if ctx.guild is None:
-                await ctx.send(error("Because you cannot set a default Wikia in private messages with me, you must use this command with a `-w`/`-wiki` parameter that specifies the Wikia to use."))
+                await ctx.send(error("Because you cannot set a default wiki in private messages with me, you must use this command with a `-w`/`-wiki` parameter that specifies the wiki to use."))
                 return None, None, None
 
-            wikia = await self.config.guild(ctx.guild).default_wikia()
-            if wikia is None or not self.wikia_is_valid_subdomain(wikia):
-                await ctx.send(error("No default Wikia has been set for this server. You must use this command with a `-w`/`-wiki` parameter that specifies the Wikia to use.*"))
+            subdomain = await self.config.guild(ctx.guild).default_wikia()
+            if subdomain is None or not self.is_valid_subdomain(subdomain):
+                await ctx.send(error("No default wiki has been set for this server. You must use this command with a `-w`/`-wiki` parameter that specifies the wiki to use.*"))
                 return None, None, None
 
         if "#" in search_terms:
             parts = search_terms.split("#", 1)
             search_terms = parts[0].strip(" <>:\t\n")
             section = parts[1].strip(" <>:\t\n")
-            section = self.normalize_section(section.replace("_", " "))
+            section = self.mw_normalize_section(section.replace("_", " "))
         else:
             search_terms = search_terms.strip()
             section = None
 
         search_terms = search_terms.replace("_", " ")
-        return wikia, search_terms, section
+        return subdomain, search_terms, section
 
-    async def wikia_api_get(self, wikia, api_url):
-        """Performs a Wikia API request."""
-        base_url = "https://{}.wikia.com/wiki/".format(wikia)
-        base_api_url = "https://{}.wikia.com/api.php?".format(wikia)
+    async def mw_api_get(self, subdomain, api_url):
+        """Performs a FANDOM Wiki API request."""
+        base_url = "https://{}.fandom.com/wiki/".format(subdomain)
+        base_api_url = "https://{}.fandom.com/api.php?".format(subdomain)
         url = "{}{}".format(base_api_url, api_url)
-        headers = {"User-Agent": "WikiaReaderCog/1.0 MegamiBot/1.0 RedDiscordBot/1.0 DiscordPy/1.0"}
+        headers = {"User-Agent": "WikiReaderCog/1.1 RedDiscordBot/3.0 DiscordPy/1.0"}
         result = None
         async with self.http_client.get(url, headers=headers) as r:
             result = await r.json()
         return result, base_url
 
-    async def wikia_api_search_pages(self, wikia, page_name, profile = "fuzzy", limit = 10):
-        """Searches for a page by title using the Wikia API."""
+    async def mw_api_search_pages(self, subdomain, page_name, profile = "fuzzy", limit = 10):
+        """Searches for a page by title using the FANDOM Wiki API."""
         page_name_quoted = urllib.parse.quote(page_name)
         url = "action=opensearch&search={}&namespace=&profile={}&redirects=resolve&limit={}&format=json".format(page_name_quoted, profile, limit)
-        result, base_url = await self.wikia_api_get(wikia, url)
+        result, base_url = await self.mw_api_get(subdomain, url)
         #print("search json: ```{}```".format(result))
 
         warnings = None
@@ -177,13 +177,13 @@ class Wikia(commands.Cog):
         else:
             return [], warnings
 
-    async def wikia_api_get_page_images(self, wikia, page_name, limit = 1):
-        """Gets the pageimages of a page using the Wikia API.
+    async def mw_api_get_page_images(self, subdomain, page_name, limit = 1):
+        """Gets the pageimages of a page using the FANDOM Wiki API.
         
         This wasn't working as intended so is currently unused!"""
         page_name_quoted = urllib.parse.quote(page_name)
         url = "action=query&prop=images&titles={}&imlimit={}&format=json".format(page_name_quoted, limit)
-        result, base_url = await self.wikia_api_get(wikia, url)
+        result, base_url = await self.mw_api_get(subdomain, url)
         #print("pageimages json: ```{}```".format(result))
 
         if not result is None and "query" in result:
@@ -197,18 +197,18 @@ class Wikia(commands.Cog):
                                 pass
         return []
 
-    async def wikia_api_get_page_content(self, wikia, page_name, section_name, search_fields = {}):
-        """Gets the content of a page using the Wikia API."""
+    async def mw_api_get_page_content(self, subdomain, page_name, section_name, search_fields = {}):
+        """Gets the content of a page using the FANDOM Wiki API."""
         page_name_quoted = urllib.parse.quote(page_name)
         url = "action=query&titles={}&prop=revisions&rvprop=timestamp|flags|comment|user|size|content&format=json&redirects=1".format(page_name_quoted)
-        result, base_url = await self.wikia_api_get(wikia, url)
+        result, base_url = await self.mw_api_get(subdomain, url)
 
         fields = search_fields
         fields["found_content"] = False
-        fields["wikia"] = wikia
+        fields["subdomain"] = subdomain
         fields["base_url"] = base_url
         fields["page_name"] = page_name
-        fields["namespace"] = self.wikia_get_namespace(page_name)
+        fields["namespace"] = self.mw_get_namespace(page_name)
         fields["page_url"] = base_url + urllib.parse.quote(page_name.replace(" ", "_"))
         fields["section_name"] = section_name
         fields["page_content"] = ""
@@ -253,7 +253,7 @@ class Wikia(commands.Cog):
                             if "minor" in rev:
                                 fields["edit"]["flags"] += "m"
                             if "*" in rev:
-                                fields = self.wikia_parse_content_page(rev["*"].replace("\r", ""), fields)
+                                fields = self.mw_parse_content_page(rev["*"].replace("\r", ""), fields)
                                 fields["found_content"] = True
 
         return fields["found_content"], fields
@@ -261,11 +261,11 @@ class Wikia(commands.Cog):
         #except Exception as ex:
         #    await ctx.send("Error: {}".format(ex))
 
-    async def wikia_api_get_category_members(self, wikia, page_name, limit = 10):
-        """Gets the members of a category using the Wikia API."""
+    async def mw_api_get_category_members(self, subdomain, page_name, limit = 10):
+        """Gets the members of a category using the FANDOM Wiki API."""
         page_name_quoted = urllib.parse.quote(page_name)
         url = "action=query&list=categorymembers&cmtitle={}&cmlimit={}&format=json&redirects=1".format(page_name_quoted, limit)
-        result, base_url = await self.wikia_api_get(wikia, url)
+        result, base_url = await self.mw_api_get(subdomain, url)
         #print("category members json: ```{}```".format(result))
 
         subcats = []
@@ -274,22 +274,22 @@ class Wikia(commands.Cog):
             if "categorymembers" in result["query"]:
                 for member in result["query"]["categorymembers"]:
                     member_page_name = member["title"]
-                    ns = self.wikia_get_namespace(member_page_name)
+                    ns = self.mw_get_namespace(member_page_name)
                     if ns == "Category":
                         subcats.append(member_page_name)
                     else:
                         members.append(member_page_name)
         return members, subcats
 
-    async def wikia_api_get_image_info(self, wikia, page_name, thumb_width = None):
-        """Gets the image info of an image using the Wikia API."""
+    async def mw_api_get_image_info(self, subdomain, page_name, thumb_width = None):
+        """Gets the image info of an image using the FANDOM Wiki API."""
         page_name_quoted = urllib.parse.quote(page_name)
         if thumb_width:
             iiurlwidth = "&iiurlwidth={}".format(thumb_width)
         else:
             iiurlwidth = ""
         url = "action=query&titles={}&prop=imageinfo&iiprop=timestamp|user|size|url{}&format=json&redirects=1".format(page_name_quoted, iiurlwidth)
-        result, base_url = await self.wikia_api_get(wikia, url)
+        result, base_url = await self.mw_api_get(subdomain, url)
         #print("image info json: ```{}```".format(result))
 
         if not result is None and "query" in result:
@@ -303,11 +303,11 @@ class Wikia(commands.Cog):
 
         return None
 
-    async def wikia_api_get_image_serving_image(self, wikia, page_name):
+    async def mw_api_get_image_serving_image(self, subdomain, page_name):
         """Gets the image served for a page using the Wikia ImageServing API."""
         page_name_quoted = urllib.parse.quote(page_name)
         url = "action=imageserving&wisTitle={}&format=json".format(page_name_quoted)
-        result, base_url = await self.wikia_api_get(wikia, url)
+        result, base_url = await self.mw_api_get(subdomain, url)
         #print("image info json: ```{}```".format(result))
 
         if not result is None and "image" in result:
@@ -316,19 +316,19 @@ class Wikia(commands.Cog):
 
         return None
 
-    def wikia_links(self, base_url, link_array, strip_ns = False):
+    def mw_format_links(self, base_url, link_array, strip_ns = False):
         """Convert the list of links into a list of formatted [TEXT](URL) strings."""
         result = []
         for link in link_array:
-            ns = self.wikia_get_namespace(link)
+            ns = self.mw_get_namespace(link)
             dest = base_url + link
             if strip_ns and len(ns) > 0:
                 link = link[len(ns) + 1:]
             result.append("[{}]({})".format(link, dest.replace(" ", "_").replace(")", "\\)")))
         return self.cut(", ".join(result), 1024)
 
-    def wikia_sort_category_members(self, members):
-        """Sort categories into alphabetical buckets like Wikia does."""
+    def mw_sort_category_members(self, members):
+        """Sort categories into alphabetical buckets like wikis do."""
         buckets = {}
         for member in members:
             found = False
@@ -350,9 +350,9 @@ class Wikia(commands.Cog):
                 buckets["*"].append(member)
         return buckets
 
-    def wikia_embed_output(self, ctx, **kwargs):
+    def mw_embed_output(self, ctx, **kwargs):
         """Takes a set of returned fields from a combination of requests and returns the discord.Embed object to display."""
-        wikia = kwargs["wikia"]
+        subdomain = kwargs["subdomain"]
         base_url = kwargs["base_url"]
         title = kwargs["page_name"]
         if not kwargs["section_name"] is None and len(kwargs["section_name"]) > 0 and "section_content" in kwargs:
@@ -376,21 +376,21 @@ class Wikia(commands.Cog):
             title=title,
             url=kwargs["page_url"] + kwargs["section_url"],
             description=description)
-        color = self.get_wikia_color(wikia)
+        color = self.fandom_get_color(subdomain)
         if color:
-            data.color = discord.Color(value=self.get_wikia_color(wikia))
+            data.color = discord.Color(value=self.fandom_get_color(subdomain))
 
         # category results
         if "cat_subcats" in kwargs:
             if len(kwargs["cat_subcats"]) > 0:
-                data.add_field(name="Sub-categories", value=self.wikia_links(base_url, kwargs["cat_subcats"], True), inline=False)
+                data.add_field(name="Sub-categories", value=self.mw_format_links(base_url, kwargs["cat_subcats"], True), inline=False)
         if "cat_members" in kwargs:
             if len(kwargs["cat_members"]) > 10: # A-Z mode
-                buckets = self.wikia_sort_category_members(kwargs["cat_members"])
+                buckets = self.mw_sort_category_members(kwargs["cat_members"])
                 for bucket in sorted(buckets.keys()):
                     data.add_field(name=bucket, value=", ".join(buckets[bucket]), inline=False)
             elif len(kwargs["cat_members"]) > 0: # link mode
-                data.add_field(name="Members", value=self.wikia_links(base_url, kwargs["cat_members"]), inline=False)
+                data.add_field(name="Members", value=self.mw_format_links(base_url, kwargs["cat_members"]), inline=False)
             else: # no members
                 data.add_field(name="Members", value="*None*")
 
@@ -450,7 +450,7 @@ class Wikia(commands.Cog):
             if "flags" in edit_detail and len(edit_detail["flags"]) > 0:
                 edit_f = " [{}] ".format(edit_detail["flags"])
             if "comment" in edit_detail and len(edit_detail["comment"]) > 0:
-                edit_c_p, _ = self.wikia_parse_content_automata(edit_detail["comment"], kwargs["base_url"], no_link_urls=True)
+                edit_c_p, _ = self.mw_parse_content_automata(edit_detail["comment"], kwargs["base_url"], no_link_urls=True)
                 edit_c = " ({})".format(edit_c_p)
             edit = "Last edited {} by {}{}{}".format(edit_t, edit_u, edit_f, edit_c)
             data.add_field(name="Last edit", value=edit)
@@ -459,7 +459,7 @@ class Wikia(commands.Cog):
         # page categories
         if "categories" in kwargs:
             if len(kwargs["categories"]) > 0:
-                data.add_field(name="Categories", value=self.wikia_links(base_url, kwargs["categories"], True))
+                data.add_field(name="Categories", value=self.mw_format_links(base_url, kwargs["categories"], True))
             else:
                 data.add_field(name="Categories", value="*Uncategorized*")
 
@@ -474,28 +474,28 @@ class Wikia(commands.Cog):
             data.add_field(name="Search terms", value=kwargs["search_input"])
         elif state == "error_multiple_choices":
             data.add_field(name="Search terms", value=kwargs["search_input"])
-            data.add_field(name="Search results", value=self.wikia_links(base_url, kwargs["search_results"]))
+            data.add_field(name="Search results", value=self.mw_format_links(base_url, kwargs["search_results"]))
 
         # image caption
         if "first_image_caption" in kwargs and len(kwargs["first_image_caption"].strip()) > 0:
-            caption_p, _ = self.wikia_parse_content_automata(kwargs["first_image_caption"], kwargs["base_url"])
+            caption_p, _ = self.mw_parse_content_automata(kwargs["first_image_caption"], kwargs["base_url"])
             data.add_field(name=self.cut("{}".format(kwargs["first_image"][0].replace("_", " ")), 25, 10), value=caption_p)
             #footer_fields.append("Image is "{}" with caption "{}"".format(kwargs["first_image"][0].replace("_", " "), caption_p))
         elif "im_details" in kwargs and "thumburl" in kwargs["im_details"]:
             data.add_field(name=self.cut("{}".format(kwargs["first_image"][0].replace("_", " ")), 25, 10), value="*No caption provided.*")
 
-        data.set_author(name="{} Wikia".format(kwargs["wikia"].title()), url="{}Main_Page".format(kwargs["base_url"]))
+        data.set_author(name="{} Wiki".format(kwargs["subdomain"].title()), url="{}Main_Page".format(kwargs["base_url"]))
         data.set_footer(text="Requested by {}".format(ctx.message.author))
         #print(data.to_dict())
         return data
     
-    def normalize_section(self, sect):
+    def mw_normalize_section(self, sect):
         """Normalizes a section name."""
         return urllib.parse.unquote(sect.replace("_", " ").replace(".", "%"))
 
-    def wikia_link_is_image(self, link):
+    def mw_is_link_image(self, link):
         link = link.strip()
-        ns = self.wikia_get_namespace(link)
+        ns = self.mw_get_namespace(link)
         #print(str(link) + "  ns = " + str(ns) + "  endswith jpg?" + str(link.lower().endswith(".jpg")))
         if (ns == "File" or ns == "Image") and \
                (link.lower().endswith(".png") or \
@@ -506,20 +506,20 @@ class Wikia(commands.Cog):
         else:
             return False
 
-    def wikia_get_namespace(self, page_name):
+    def mw_get_namespace(self, page_name):
         """Retrieve the namespace of a link."""
         if page_name.find(":", 2) > 1:
             return page_name[:page_name.find(":", 2)]
         else:
             return ""
 
-    def wikia_is_valid_subdomain(self, subdomain):
+    def is_valid_subdomain(self, subdomain):
         return subdomain[0].isalnum() and \
                 ((subdomain[1:].replace("-", "").isalnum() and len(subdomain) > 1) or \
                 len(subdomain) == 1)
 
-    def wikia_parse_link(self, page_content, start, end, bracket_depth):
-        """Parses a link in a Wikia page into destination, text, and namespace."""
+    def mw_parse_link(self, page_content, start, end, bracket_depth):
+        """Parses a link in a wiki page into destination, text, and namespace."""
         if bracket_depth == 1:
             splitter = " "
         elif bracket_depth == 2:
@@ -541,7 +541,7 @@ class Wikia(commands.Cog):
         if bracket_depth == 2:
             # additional stuff:
             # internal links get their "namespace" copied here (only special ones should be checked)
-            ns = self.wikia_get_namespace(dest)
+            ns = self.mw_get_namespace(dest)
             # internal links get text-extending (until the first non-alphabetic character after the link-end).
             for char in page_content[end:]:
                 if char.upper() in string.ascii_uppercase:
@@ -583,26 +583,26 @@ class Wikia(commands.Cog):
         #print("length: {} cut_at: {} wcut: {} rescut: {}".format(input_content_length, length, word_cut, str(len(content))))
         return content
 
-    def get_wikia_color(self, wikia):
+    def fandom_get_color(self, subdomain):
         """Get (hardcoded) color for this subdomain."""
-        wikia = wikia.lower()
-        if wikia == "kiseki":
+        subdomain = subdomain.lower()
+        if subdomain == "kiseki":
             return 0x005a73
-        elif wikia == "legendofheroes":
+        elif subdomain == "legendofheroes":
             return 0x6699ff
-        elif wikia == "trails":
+        elif subdomain == "trails":
             return 0x006cb0
-        elif wikia == "isu":
+        elif subdomain == "isu":
             return 0xdd360a
-        elif wikia == "megamitensei":
+        elif subdomain == "megamitensei":
             return 0x721410
-        elif wikia == "onehundredpercentorangejuice":
+        elif subdomain == "onehundredpercentorangejuice":
             return 0xfe7e03
         else:
             return None
 
     def entity_replace(self, content):
-        """Replace Wikia format for simple styles with the equivalent Markdown."""
+        """Replace wiki format for simple styles with the equivalent Markdown."""
         rwf_data = [
                 {"find": "'''''", "replace": "***"},
                 {"find": "'''", "replace": "**"},
@@ -618,8 +618,8 @@ class Wikia(commands.Cog):
             content = content.replace(rwf["find"], rwf["replace"])
         return content
 
-    def wikia_parse_content_automata(self, page_content, base_url, *, no_link_urls=False):
-        """Parse content by finding complex formatting objects and generating links lists, stripping templates, and other related tasks.
+    def mw_parse_content_automata(self, page_content, base_url, *, no_link_urls=False):
+        """Parse wiki content by finding complex formatting objects and generating links lists, stripping templates, and other related tasks.
 
         Don't look at this function, it's ugly."""
         page_content = self.entity_replace(page_content)
@@ -740,7 +740,7 @@ class Wikia(commands.Cog):
                     if link_depth > 2:
                         link_depth = 2
                     link_end_pos = pos + 1
-                    destination, text, namespace, link_extend_length = self.wikia_parse_link(page_content, link_start_pos, link_end_pos, link_depth)
+                    destination, text, namespace, link_extend_length = self.mw_parse_link(page_content, link_start_pos, link_end_pos, link_depth)
                     if link_depth == 1 and not destination.startswith("http://") and not destination.startswith("https://") and not destination.startswith("//"):
                         # not a link! this may be a word enclosed in [ ].
                         #print("not a link: link={} text={} ns={} link_depth={} is_link_caption={}".format(destination, text, namespace, link_depth, is_link_caption))
@@ -890,11 +890,11 @@ class Wikia(commands.Cog):
         return page_content, links
 
 
-    def wikia_parse_content_page(self, page_content, fields):
-        """Parses the content of a Wikia page."""
+    def mw_parse_content_page(self, page_content, fields):
+        """Parses the content of a wiki page."""
         global find_whitespace
 
-        page_content, links = self.wikia_parse_content_automata(page_content, fields["base_url"])
+        page_content, links = self.mw_parse_content_automata(page_content, fields["base_url"])
 
         # find header for section
         lines = page_content.split("\n")
@@ -914,7 +914,7 @@ class Wikia(commands.Cog):
                     break
             if header_number > 0:
                 current_section = linet.strip(" ")
-                if not section_name is None and self.normalize_section(current_section.lower()) == self.normalize_section(section_name.lower()):
+                if not section_name is None and self.mw_normalize_section(current_section.lower()) == self.mw_normalize_section(section_name.lower()):
                     section_found = True
                     section_name = current_section
                 continue
@@ -938,7 +938,7 @@ class Wikia(commands.Cog):
 
         fields["links"] = links
         fields["categories"] = [x[0].replace("_", " ") for x in links if x[2] == "Category"]
-        fields["images"] = [(x[0], x[1]) for x in links if self.wikia_link_is_image(x[0])]
+        fields["images"] = [(x[0], x[1]) for x in links if self.mw_is_link_image(x[0])]
         #print(str(fields["images"]))
         if len(fields["images"]) > 0:
             fields["first_image"] = fields["images"][0]
@@ -961,24 +961,24 @@ class Wikia(commands.Cog):
 
         return fields
 
-    @commands.group()
+    @commands.group(aliases=["wikiaset"])
     @checks.mod_or_permissions(manage_guild=True)
-    async def wikiaset(self, ctx):
-        """Wikia module settings."""
+    async def fandomset(self, ctx):
+        """FANDOM Wiki module settings."""
         pass
 
-    @wikiaset.command(name="default", aliases=["defaultwiki", "defaultwikia"])
+    @fandomset.command(name="default", aliases=["defaultwiki", "defaultfandom", "defaultwikia"])
     @checks.mod_or_permissions(manage_guild=True)
-    async def wikiaset_default(self, ctx, subdomain):
-        """Set the default Wikia for this server."""
+    async def fandomset_default(self, ctx, subdomain):
+        """Set the default wiki for this server."""
         if ctx.guild is None:
-            await ctx.send(error("You cannot set a default Wikia in private messages with me. Use the `wikiaset default` command in a server."))
+            await ctx.send(error("You cannot set a default wiki in private messages with me. Use the `fandomset default` command in a server."))
             return
 
-        if self.wikia_is_valid_subdomain(subdomain):
+        if self.is_valid_subdomain(subdomain):
             await self.config.guild(ctx.guild).default_wikia.set(subdomain.lower())
-            await ctx.send(info("The default Wikia for this server is now: <http://{}.wikia.com>".format(escape(subdomain.lower(), mass_mentions = True))))
+            await ctx.send(info("The default wiki for this server is now: <http://{}.fandom.com>".format(escape(subdomain.lower(), mass_mentions = True))))
         else:
-            await ctx.send(error("That Wikia subdomain is not valid."))
+            await ctx.send(error("That subdomain is not valid."))
 
 

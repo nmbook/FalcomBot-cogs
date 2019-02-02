@@ -1,9 +1,9 @@
 {
-    "name": "Wikia",
+    "name": "FANDOM Wiki",
     "author": ["Ribose"],
-    "description": "Command to request detailed content of Wikia pages.",
-    "short": "Command to request Wikia pages.",
-    "tags": ["wikia", "wiki", "utilities"],
-    "install_msg": "Thank you for installing Wikia. Remember to set a default wikia subdomain with `[p]wikiaset default`. The command is `[p]wikia article`, or `[p]wikia -w subdomain article`"
+    "description": "Command to request detailed content of FANDOM Wiki pages.",
+    "short": "Command to request FANDOM Wiki pages.",
+    "tags": ["fandom", "fandomwiki", "wikia", "wiki", "mediawiki", "utilities"],
+    "install_msg": "Thank you for installing the FANDOM Wiki (previously known as Wikia) command. Remember to set a default subdomain with `[p]fandomset default`. The command is `[p]fandom article`, or `[p]fandom -w subdomain article`"
 }
 
