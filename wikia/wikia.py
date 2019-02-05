@@ -49,7 +49,7 @@ class Wikia(commands.Cog):
             fields = {}
             fields["search_state"] = "title"
             result, fields                  = await self.mw_api_get_page_content(subdomain, page_name, section_name, search_fields=fields)
-            if not result and fields["namespace"] != "Category":
+            if not result and not fields["namespace"] in ["Category", "category"]:
                 fields["search_state"] = "fuzzy"
                 fields["search_input"] = page_name
                 fields["search_results"], \
@@ -66,7 +66,7 @@ class Wikia(commands.Cog):
                     fields["search_state"] = "error_no_results"
 
             if result:
-                if fields["namespace"] == "File" or fields["namespace"] == "Image":
+                if fields["namespace"] in ["File", "file", "Image", "image"]:
                     #print(page_name)
                     fields["im_details"]        = await self.mw_api_get_image_info(subdomain, page_name, thumb_width = None)
                 elif "first_image" in fields and not fields["first_image"] is None:
@@ -74,7 +74,7 @@ class Wikia(commands.Cog):
                     fields["im_details"]        = await self.mw_api_get_image_info(subdomain, fields["first_image"][0], thumb_width = None)
                     #fields["im_serving"]        = await self.mw_api_get_image_serving_image(subdomain, page_name)
 
-            if fields["namespace"] == "Category":
+            if fields["namespace"] in ["Category", "category"]:
                 fields["cat_members"], \
                       fields["cat_subcats"] = await self.mw_api_get_category_members(subdomain, page_name, 100)
                 if len(fields["cat_members"]) == 0 and len(fields["cat_subcats"]) == 0 and not result:
@@ -275,7 +275,7 @@ class Wikia(commands.Cog):
                 for member in result["query"]["categorymembers"]:
                     member_page_name = member["title"]
                     ns = self.mw_get_namespace(member_page_name)
-                    if ns == "Category":
+                    if ns in ["Category", "category"]:
                         subcats.append(member_page_name)
                     else:
                         members.append(member_page_name)
@@ -510,7 +510,7 @@ class Wikia(commands.Cog):
         link = link.strip()
         ns = self.mw_get_namespace(link)
         #print(str(link) + "  ns = " + str(ns) + "  endswith jpg?" + str(link.lower().endswith(".jpg")))
-        if (ns == "File" or ns == "Image") and \
+        if ns in ["File", "file", "Image", "image"] and \
                (link.lower().endswith(".png") or \
                 link.lower().endswith(".gif") or \
                 link.lower().endswith(".jpg") or \
@@ -709,7 +709,7 @@ class Wikia(commands.Cog):
                         im_end += 1
                     im = im.strip("[] ")
                     if len(im) > 0:
-                        if not im.startswith("File:") and not im.startswith("Image:"):
+                        if not im.startswith("File:") and not im.startswith("Image:") and not im.startswith("file:") and not im.startswith("image:"):
                             im = "[[File:" + im + "]]"
                         else:
                             im = "[[" + im + "]]"
@@ -762,12 +762,12 @@ class Wikia(commands.Cog):
                     else:
                         links.append((destination, text, namespace, link_start_pos, link_end_pos - link_start_pos))
                         #print("link: link={} text={} ns={} link_depth={}".format(destination, text, namespace, link_depth))
-                        if not namespace is None and (namespace == "File" or namespace == "Image" or namespace == "Category" or len(namespace) == 2):
+                        if not namespace is None and (namespace in ["File", "file", "Image", "image", "Category", "category"] or len(namespace) == 2):
                             # remove File: (embedded images), Category: (category specs), XX: (other language page specs) - saved in links data
                             page_content = page_content[:link_start_pos] + page_content[link_end_pos + link_extend_length:]
                             pos = link_start_pos - 1
                         else:
-                            if namespace == ":Category" or namespace == ":File" or namespace == ":Image":
+                            if namespace in [":Category", ":category", ":File", ":file", ":Image", ":image"]:
                                 # remove the ":" from the start
                                 destination = destination[1:]
                                 text = text[1:]
@@ -951,7 +951,7 @@ class Wikia(commands.Cog):
                 fields["section_error"] = "*Error: No section called `{}`.*".format(section_name)
 
         fields["links"] = links
-        fields["categories"] = [x[0].replace("_", " ") for x in links if x[2] == "Category"]
+        fields["categories"] = [x[0].replace("_", " ") for x in links if x[2] in ["Category", "category"]]
         fields["images"] = [(x[0], x[1]) for x in links if self.mw_is_link_image(x[0])]
         #print(str(fields["images"]))
         if len(fields["images"]) > 0:
