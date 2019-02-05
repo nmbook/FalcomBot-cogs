@@ -769,8 +769,9 @@ class Wikia(commands.Cog):
                         else:
                             if namespace in [":Category", ":category", ":File", ":file", ":Image", ":image"]:
                                 # remove the ":" from the start
+                                if text.startswith(destination):
+                                    text = text[1:]
                                 destination = destination[1:]
-                                text = text[1:]
                             # prepend if not absolute URL
                             if not destination.startswith("http://") and not destination.startswith("https://") and not destination.startswith("//"):
                                 destination = base_url + destination
