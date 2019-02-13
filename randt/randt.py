@@ -12,29 +12,29 @@ class RandomizationTools(commands.Cog):
         self.bot = bot
 
     @commands.command()
-    async def choose(self, ctx, *items):
-        """Chooses a random item from N multiple items.
+    async def pick(self, ctx, *items):
+        """Chooses/picks a random item from N multiple items.
 
         To denote multiple-word items, you should use double quotes."""
         items = [escape(c, mass_mentions=True) for c in items]
         if len(items) < 1:
-            await ctx.send(error("Not enough items to choose from."))
+            await ctx.send(error("Not enough items to pick from."))
         else:
-            await ctx.send(info("From {} items, I choose: {}".format(len(items), choice(items))))
+            await ctx.send(info("From {} items, I pick: {}".format(len(items), choice(items))))
 
     @commands.command()
-    async def choosex(self, ctx, x : int, *items):
-        """From a set of N items, choose X items and display them.
+    async def pickx(self, ctx, x : int, *items):
+        """From a set of N items, chooses/picks X items and display them.
         
-        This is random choosing with replacement, and is the same as using the "choose" command multiple times.
+        This is random choosing with replacement, and is the same as using the "pick" command multiple times.
         To denote multiple-word items, use double quotes."""
         items = [escape(c, mass_mentions=True) for c in items]
         if x < 1:
-            await ctx.send(error("Must choose a positive number of items."))
+            await ctx.send(error("Must pick a positive number of items."))
         elif len(items) < 1:
-            await ctx.send(error("Not enough items to choose from."))
+            await ctx.send(error("Not enough items to pick from."))
         else:
-            await ctx.send(info("From {} items, I choose: {}".format(len(items), ", ".join(choices(items, k=x)))))
+            await ctx.send(info("From {} items, I pick: {}".format(len(items), ", ".join(choices(items, k=x)))))
 
     @commands.command()
     async def drawx(self, ctx, x : int, *items):
@@ -53,8 +53,8 @@ class RandomizationTools(commands.Cog):
             await ctx.send(info("From {} items, I draw: {}".format(len(items), ", ".join(drawn))))
 
     @commands.command()
-    async def shufflethis(self, ctx, *items):
-        """Shuffles a list of items.
+    async def mix(self, ctx, *items):
+        """Shuffles/mixes a list of items.
 
         To denote multiple-word items, use double quotes."""
         items = [escape(c, mass_mentions=True) for c in items]

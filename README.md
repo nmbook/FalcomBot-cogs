@@ -12,12 +12,12 @@ Useful utilities I created for the Falcom discord, but anyone can use these ones
 
 - Random Tools (`randt`): Commands for various randomization tasks.
     - `[p]rolldice <dice>`
-    - `[p]choose <item> <item> ...`
-    - `[p]choosex <n> <item> <item> ...`
+    - `[p]pick <item> <item> ...`
+    - `[p]pickx <n> <item> <item> ...`
     - `[p]drawx <n> <item> <item> ...`
-    - `[p]shufflethis <item> <item> ...`
+    - `[p]mix <item> <item> ...`
 
-- Wikia Retrieval (`wikia`): A command to retrieve detailed, formatted preview content from a Wikia page.
+- FANDOM Wiki (`wikia`): A command to retrieve detailed, formatted preview content from a FANDOM Wiki page.
     - `[p]wiki -w <subdomain> <page name>`: Lookup page. "`-w <subdomain>`" part is optional if a default is set for a server.
     - [mod] `[p]wikiset default <subdomain>`
 
