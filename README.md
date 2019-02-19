@@ -48,7 +48,7 @@ Useful utilities I created for the Falcom discord, but anyone can use these ones
 - ROT-13 (`rot13`): ROT-13 encoding and decoding system, allowing users to use an emoji react to instantly decode privately.
     - `[p]rot13 <text>`: Encode/decode the given text.
     - [mod] `[p]req13set dm_rot13 [bool]`: [default: true] Whether to DM users ROT-13ed text when they react with :unlock:.
-    - [mod] `[p]req13set auto_react_to [bool]`: [default: ] If set to a non-empty string, the bot auto-reacts to messages containing the string with :unlock:. Suggested usage: set it to "rot13" and let users prefix their encoded text with it and the bot allows one-tap decoding.
+    - [mod] `[p]req13set auto_react_to [str]`: [default: ] If set to a non-empty string, the bot auto-reacts to messages containing the string with :unlock:. Suggested usage: set it to "rot13" and let users prefix their encoded text with it and the bot allows one-tap decoding.
 
 
 # Installation
