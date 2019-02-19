@@ -34,6 +34,17 @@ Useful utilities I created for the Falcom discord, but anyone can use these ones
     - [mod] `[p]reqset max_requestable <limit>`: [default: 3] Set the maximum number of requestable roles the bot allows adding to a user. A moderator can still freely apply more than set here.
     - [mod] `[p]reqset auto_post_list [bool]`: [default: true] Set whether post lists are updated automatically when users change their roles using `[p]request`.
 
+- Text Tools (`textt`): Commands for text-related manipulation or information.
+    - [p]echo: Echos the given text.
+    - [p]fullwidth: Turn the given text into fullwidth characters where able.
+    - [p]upper: Turn the given text into uppercase characters where able.
+    - [p]lower: Turn the given text into lowercase characters where able.
+    - [p]uninormalize: Normalizes the given text using one of the four forms, NFC, NFD, NFKC, NFKD.
+    - [p]unicode: Gives Unicode information on the character(s) given. If more than one character, gives a menu to scroll through. Can also take a U+XXXX, \xXXXX, \uXXXXX, or full Unicode name (has to be reasonably exact).
+    - [p]base64: Converts the input text (UTF-8 data) into base-64.
+    - [p]hex2str: Converts the input hex to a string, assuming UTF-8 encoded data.
+    - [p]hex2str: Converts the input hex to a string, given a codec name.
+
 - ROT-13 (`rot13`): ROT-13 encoding and decoding system, allowing users to use an emoji react to instantly decode privately.
     - `[p]rot13 <text>`: Encode/decode the given text.
     - [mod] `[p]req13set dm_rot13 [bool]`: [default: true] Whether to DM users ROT-13ed text when they react with :unlock:.

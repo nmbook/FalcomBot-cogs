@@ -1,6 +1,7 @@
 import discord
 from redbot.core import commands
 from redbot.core.utils.chat_formatting import escape, info, error
+from redbot.core.utils.menus import menu, DEFAULT_CONTROLS
 import base64
 import codecs
 from random import choice
@@ -72,8 +73,8 @@ class TextTools(commands.Cog):
         for k, v in list(self._flipmap.items()):
             self._flipmap[v] = k
 
-    @commands.command()
-    async def flip(self, ctx, *, text = None):
+    @commands.command(hidden=True)
+    async def __flipx(self, ctx, *, text = None):
         """Flips a coin... or text/mention.
 
         Defaults to coin.
@@ -129,59 +130,66 @@ class TextTools(commands.Cog):
         """Returns the information on a Unicode character or named character."""
 
         if len(arg) == 1:
-            char = arg
+            chars = [arg]
         else:
+            #if " " in arg[1:-1] or "," in arg[1:-1] or ";" in arg[1:-1]:
+            #    arg = arg[:0] + arg[1:-1].replace(",", " ").replace(";", " ") + arg[-1:]
+
             # try to find what character is meant
             # if starts with "U+", "\x", "\u", it"s hex
+            
             if arg.upper().startswith("U+") or arg.upper().startswith("\\U") or arg.upper().startswith("\\X"):
                 arg = "0x" + arg[2:].strip()
             try:
                 if arg.lower().startswith("0x"):
                     arg = arg[2:]
-                char = chr(int(arg, 16))
+                chars = [chr(int(arg, 16))]
             except ValueError:
                 # otherwise, use name lookup
                 try:
-                    char = unicodedata.lookup(arg)
+                    chars = [unicodedata.lookup(arg)]
                 except KeyError:
-                    await ctx.send("Character not found: `{}`".format(arg))
-                    return
+                    chars = arg
+                    #await ctx.send(error("Character not found: `{}`".format(arg)))
+                    #return
         
-        value = ord(char)
-        name = unicodedata.name(char, None) # str or None
-        decimal = unicodedata.decimal(char, None) # int or None
-        digit = unicodedata.digit(char, None) # int or None
-        numeric = unicodedata.numeric(char, None) # float or None
-        category = unicodedata.category(char) # str
-        bidirectional = unicodedata.bidirectional(char) # str
-        combining = unicodedata.combining(char) # str
-        east_asian_width = unicodedata.east_asian_width(char) # str
-        mirrored = unicodedata.mirrored(char) # int
-        decomposition = unicodedata.decomposition(char) # str
+        embeds = []
+        n = 0
+        for char in chars:
+            n += 1
+            value = ord(char)
+            name = unicodedata.name(char, None)
+            #name_url = name.lower().replace(" ", "-")
+            dt = {}
+            dt["Character"]        = char
+            dt["Name"]             = name # str or None
+            dt["Decimal"]          = unicodedata.decimal(char, None) # int or None
+            dt["Digit"]            = unicodedata.digit(char, None) # int or None
+            dt["Numeric"]          = unicodedata.numeric(char, None) # float or None
+            dt["Category"]         = unicodedata.category(char) # str
+            dt["Bidirectional"]    = unicodedata.bidirectional(char) # str
+            dt["Combining class"]  = unicodedata.combining(char) # str
+            dt["East Asian width"] = unicodedata.east_asian_width(char) # str
+            dt["Mirrored"]         = unicodedata.mirrored(char) # int
+            dt["Decomposition"]    = unicodedata.decomposition(char) # str
 
-        table  = "About Unicode U+{:04X}:".format(value)
-        table += "```\nCharacter:        {}".format(char)
-        if not name is None:
-            table += "\nName:             {}".format(name)
-        if not decimal is None:
-            table += "\nDecimal:          {}".format(decimal)
-        if not digit is None:
-            table += "\nDigit:            {}".format(digit)
-        if not numeric is None:
-            table += "\nNumeric:          {}".format(numeric)
-        table += "\nCategory:         {}".format(category)
-        if len(bidirectional) > 0:
-            table += "\nBidirectional:    {}".format(bidirectional)
-        if combining != 0:
-            table += "\nCombining class:  {}".format(combining)
-        table += "\nEast Asian width: {}".format(east_asian_width)
-        if mirrored != 0:
-            table += "\nMirrored:         {}".format(mirrored)
-        if len(decomposition) > 0:
-            table += "\nDecomposition:    {}".format(decomposition)
-        table += "```"
+            embed = discord.Embed(
+                title="Unicode codepoints of: {input}".format(input=arg),
+                #url="https://emojipedia.org/{}/".format(name_url),
+                description="About Unicode U+{codepoint:04X}.".format(codepoint=value))
 
-        await ctx.send(table)
+            for k, v in dt.items():
+                if not v is None and len(str(v)):
+                    if len(str(v).strip(" \t\r\n\v\f\u0085\u00a0\u1680\u2000\u2001\u2002\u2003\u2004\u2005\u2006\u2007\u2008\u2009\u200a\u2028\u2029\u202f\u205f\u3000")) == 0:
+                        v = '"{}"'.format(v)
+                    embed.add_field(name=k, value=str(v), inline=False)
+            embed.set_footer(text="Character {index} of {count}".format(index=n, count=len(arg)))
+            embeds.append(embed)
+
+        if len(embeds) > 1:
+            await menu(ctx, embeds, DEFAULT_CONTROLS)
+        else:
+            await ctx.send(embed=embeds[0])
 
     @commands.command(aliases=["shout"])
     async def upper(self, ctx, *, text):
@@ -196,14 +204,6 @@ class TextTools(commands.Cog):
         """Returns the lowercase of the given text."""
 
         result = text.lower()
-        await ctx.send(escape(result, mass_mentions = True))
-
-
-    @commands.command()
-    async def expand(self, ctx, *, text):
-        """Returns a spaced out version of the given text."""
-
-        result = " ".join([c for c in text])
         await ctx.send(escape(result, mass_mentions = True))
 
 
