@@ -33,7 +33,7 @@ class Wikia(commands.Cog):
     def __unload(self):
         self.bot.loop.create_task(self.http_client.close())
 
-    @commands.command(aliases=["wiki", "wikia"])
+    @commands.command(aliases=["wikia"])
     async def fandom(self, ctx, *, search_terms : str):
         """FANDOM Wiki lookup. Finds a wiki page by name and displays it with formatting and images.
         
