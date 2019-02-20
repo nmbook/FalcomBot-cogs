@@ -450,6 +450,8 @@ class Wikia(commands.Cog):
                     data.add_field(name="Size", value=self.mw_format_size(sz, w, h))
 
         # last edit data
+        footer_edit_time = None
+        footer_edit_text = None
         if edit_detail:
             edit_t = ""
             edit_u = ""
@@ -457,6 +459,11 @@ class Wikia(commands.Cog):
             edit_c = ""
             if  "timestamp" in edit_detail:
                 edit_t = edit_detail["timestamp"]
+                try:
+                    footer_edit_time = datetime.datetime.strptime(edit_t, "%Y-%m-%dT%H:%M:%S%z")
+                except ValueError:
+                    # don't save anything
+                    pass
             if "user" in edit_detail:
                 edit_u = edit_detail["user"]
             if "flags" in edit_detail and len(edit_detail["flags"]) > 0:
@@ -465,8 +472,8 @@ class Wikia(commands.Cog):
                 edit_c_p, _ = self.mw_parse_content_automata(edit_detail["comment"], kwargs["base_url"], no_link_urls=True)
                 edit_c = " ({})".format(edit_c_p.strip())
             edit = "Last edited {} by {}{}{}".format(edit_t, edit_u, edit_f, edit_c)
-            data.add_field(name="Last edit", value=edit)
-            #footer_fields.append(edit)
+            #data.add_field(name="Last edit", value=edit)
+            footer_edit_text = "Last edited by {}{}{}.".format(edit_u, edit_f, edit_c)
 
         # page categories
         if "categories" in kwargs:
@@ -497,8 +504,12 @@ class Wikia(commands.Cog):
             data.add_field(name=self.cut("{}".format(kwargs["first_image"][0].replace("_", " ")), 256, 10), value="*No caption provided.*")
 
         data.set_author(name="{} Wiki".format(kwargs["subdomain"].title()), url="{}Main_Page".format(kwargs["base_url"]))
-        data.set_footer(text="Requested by {}".format(ctx.message.author))
-        data.timestamp = datetime.datetime.utcnow()
+        #data.set_footer(text="Requested by {}".format(ctx.message.author))
+        #data.timestamp = datetime.datetime.utcnow()
+        if footer_edit_text:
+            data.set_footer(text=footer_edit_text)
+        if footer_edit_time:
+            data.timestamp = footer_edit_time
         #print(data.to_dict())
         return data
     
