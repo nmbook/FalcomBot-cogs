@@ -400,8 +400,11 @@ class Wikia(commands.Cog):
 
         # Section handling
         if not kwargs["section_name"] is None and len(kwargs["section_name"]) > 0 and "section_content" in kwargs:
-            data.add_field(name=kwargs["section_name"], value=kwargs["section_content"], inline=False)
-        if "section_error" in kwargs:
+            if len(kwargs["section_content"]) > 0:
+                data.add_field(name=kwargs["section_name"], value=kwargs["section_content"], inline=False)
+            else:
+                data.add_field(name=kwargs["section_name"], value="*This section is empty.*", inline=False)
+        if "section_error" in kwargs and len(kwargs["section_error"]) > 0:
             data.add_field(name="Section", value=kwargs["section_error"])
         #if "links" in kwargs and len(kwargs["links"]) > 0:
         #    for i in range(1, len(kwargs["links"])):
