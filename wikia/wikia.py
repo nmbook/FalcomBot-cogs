@@ -23,6 +23,7 @@ class Wikia(commands.Cog):
     def __init__(self, bot):
         default_guild = {
                 "default_wikia": "",
+                "accent_color_map": {},
         }
 
         self.bot = bot
@@ -82,7 +83,7 @@ class Wikia(commands.Cog):
                     del fields["cat_members"]
                     del fields["cat_subcats"]
 
-            embed = self.mw_embed_output(ctx, **fields)
+            embed = await self.mw_embed_output(ctx, **fields)
 
             try:
                 await ctx.send(embed=embed)
@@ -122,7 +123,7 @@ class Wikia(commands.Cog):
             if search_terms.startswith("wiki/") or search_terms.startswith("w/"):
                 search_start = search_terms.find("/") + 1
                 search_terms = search_terms[search_start:].strip(" <>:\t\n")
-            if not self.is_valid_subdomain(subdomain):
+            if not self.util_subdomain_is_valid(subdomain):
                 await ctx.send(error("That subdomain is not valid."))
                 return None, None, None
         else:
@@ -131,7 +132,7 @@ class Wikia(commands.Cog):
                 return None, None, None
 
             subdomain = await self.config.guild(ctx.guild).default_wikia()
-            if subdomain is None or not self.is_valid_subdomain(subdomain):
+            if subdomain is None or not self.util_subdomain_is_valid(subdomain):
                 await ctx.send(error("No default wiki has been set for this server. You must use this command with a `-w`/`-wiki` parameter that specifies the wiki to use.*"))
                 return None, None, None
 
@@ -325,26 +326,7 @@ class Wikia(commands.Cog):
             if strip_ns and len(ns) > 0:
                 link = link[len(ns) + 1:]
             result.append("[{}]({})".format(link, dest.replace(" ", "_").replace(")", "\\)")))
-        return self.cut(", ".join(result), 1024)
-
-    def mw_format_size(self, sz, w, h):
-        """Return a human readable byte, width, and height size value on wiki media (images)."""
-        int_sz = sz
-        sz_mags = ["bytes", "KB", "MB", "GB", "TB"]
-        sz_mag = 0
-        sz_fmt = "{:,d}"
-        while True:
-            str_sz = "{} {}".format(sz_fmt, sz_mags[sz_mag]).format(int_sz)
-            if int_sz <= 1024 or sz_mag + 1 >= len(sz_mags):
-                break
-            int_sz /= 1024
-            sz_mag += 1
-            sz_fmt = "{:,.1f}"
-
-        if w and h:
-            str_sz += " | {}×{}".format(w, h)
-
-        return str_sz
+        return self.util_string_cut(", ".join(result), 1024)
 
     def mw_sort_category_members(self, members):
         """Sort categories into alphabetical buckets like wikis do."""
@@ -369,7 +351,7 @@ class Wikia(commands.Cog):
                 buckets["*"].append(member)
         return buckets
 
-    def mw_embed_output(self, ctx, **kwargs):
+    async def mw_embed_output(self, ctx, **kwargs):
         """Takes a set of returned fields from a combination of requests and returns the discord.Embed object to display."""
         subdomain = kwargs["subdomain"]
         base_url = kwargs["base_url"]
@@ -395,9 +377,12 @@ class Wikia(commands.Cog):
             title=title,
             url=kwargs["page_url"] + kwargs["section_url"],
             description=description)
-        color = self.fandom_get_color(subdomain)
-        if color:
-            data.color = discord.Color(value=self.fandom_get_color(subdomain))
+        color_o = None
+        async with self.config.guild(ctx.guild).accent_color_map() as colors:
+            if subdomain in colors:
+                color_o = discord.Color(value=colors[subdomain])
+        if color_o:
+            data.color = color_o
 
         # category results
         if "cat_subcats" in kwargs:
@@ -447,7 +432,7 @@ class Wikia(commands.Cog):
                     if "width" in kwargs["im_details"] and "height" in kwargs["im_details"]:
                         w, h = kwargs["im_details"]["width"], kwargs["im_details"]["height"]
 
-                    data.add_field(name="Size", value=self.mw_format_size(sz, w, h))
+                    data.add_field(name="Size", value=self.util_size_to_string(sz, w, h))
 
         # last edit data
         footer_edit_time = None
@@ -498,10 +483,10 @@ class Wikia(commands.Cog):
         # image caption
         if "first_image_caption" in kwargs and len(kwargs["first_image_caption"].strip()) > 0:
             caption_p, _ = self.mw_parse_content_automata(kwargs["first_image_caption"], kwargs["base_url"])
-            data.add_field(name=self.cut("{}".format(kwargs["first_image"][0].replace("_", " ")), 256, 10), value=self.cut(caption_p, 1024, 10))
+            data.add_field(name=self.util_string_cut("{}".format(kwargs["first_image"][0].replace("_", " ")), 256, 10), value=self.util_string_cut(caption_p, 1024, 10))
             #footer_fields.append("Image is "{}" with caption "{}"".format(kwargs["first_image"][0].replace("_", " "), caption_p))
         elif "first_image" in kwargs and not kwargs["first_image"] is None:
-            data.add_field(name=self.cut("{}".format(kwargs["first_image"][0].replace("_", " ")), 256, 10), value="*No caption provided.*")
+            data.add_field(name=self.util_string_cut("{}".format(kwargs["first_image"][0].replace("_", " ")), 256, 10), value="*No caption provided.*")
 
         data.set_author(name="{} Wiki".format(kwargs["subdomain"].title()), url="{}Main_Page".format(kwargs["base_url"]))
         #data.set_footer(text="Requested by {}".format(ctx.message.author))
@@ -536,11 +521,6 @@ class Wikia(commands.Cog):
             return page_name[:page_name.find(":", 2)]
         else:
             return ""
-
-    def is_valid_subdomain(self, subdomain):
-        return subdomain[0].isalnum() and \
-                ((subdomain[1:].replace("-", "").isalnum() and len(subdomain) > 1) or \
-                len(subdomain) == 1)
 
     def mw_parse_link(self, page_content, start, end, bracket_depth):
         """Parses a link in a wiki page into destination, text, and namespace."""
@@ -579,54 +559,7 @@ class Wikia(commands.Cog):
 
         return dest, text, ns, ext
 
-    def cut(self, content, length, word_cut = 100):
-        """Cuts off text after a given length, preferring a certain "word length"."""
-        # loop after possible modification
-        #input_content_length = str(len(content))
-        content = content.strip()
-        cut_point = 0
-        prev_cut_point = 0
-        pos = 0
-        for char in content:
-            # set "cut" points
-            if char == " " or char == "\n" or char == "\t" or char == "-" or char == "]":
-                cut_point = pos
-
-            pos += 1
-
-            # cut here; no more looping
-            if pos > length:
-                if prev_cut_point - 3 < length and prev_cut_point + word_cut - 3 >= length:
-                    # last word is too long, cut abruptly and append "..."
-                    content = content[:length - 3] + "..."
-                else:
-                    # last word is acceptable
-                    content = content[:prev_cut_point + 1] + "..."
-                break
-            else:
-                prev_cut_point = cut_point
-        #print("length: {} cut_at: {} wcut: {} rescut: {}".format(input_content_length, length, word_cut, str(len(content))))
-        return content
-
-    def fandom_get_color(self, subdomain):
-        """Get (hardcoded) color for this subdomain."""
-        subdomain = subdomain.lower()
-        if subdomain == "kiseki":
-            return 0x005a73
-        elif subdomain == "legendofheroes":
-            return 0x6699ff
-        elif subdomain == "trails":
-            return 0x006cb0
-        elif subdomain == "isu":
-            return 0xdd360a
-        elif subdomain == "megamitensei":
-            return 0x721410
-        elif subdomain == "onehundredpercentorangejuice":
-            return 0xfe7e03
-        else:
-            return None
-
-    def entity_replace(self, content):
+    def mw_entity_replace(self, content):
         """Replace wiki format for simple styles with the equivalent Markdown."""
         rwf_data = [
                 {"find": "'''''", "replace": "***"},
@@ -647,7 +580,7 @@ class Wikia(commands.Cog):
         """Parse wiki content by finding complex formatting objects and generating links lists, stripping templates, and other related tasks.
 
         Don't look at this function, it's ugly."""
-        page_content = self.entity_replace(page_content)
+        page_content = self.mw_entity_replace(page_content)
 
         # parse links, templates, etc
         links = []
@@ -951,11 +884,11 @@ class Wikia(commands.Cog):
                 sect_content += line + "\n"
 
         fields["page_content"] = header_sect_content
-        fields["page_content"] = self.cut(fields["page_content"], 2048)
+        fields["page_content"] = self.util_string_cut(fields["page_content"], 2048)
         if not section_name is None and len(section_name) > 0:
             if section_found:
-                fields["section_name"]    = self.cut(section_name, 256, 10)
-                fields["section_content"] = self.cut(sect_content, 1024)
+                fields["section_name"]    = self.util_string_cut(section_name, 256, 10)
+                fields["section_content"] = self.util_string_cut(sect_content, 1024)
             else:
                 fields["section_name"]  = None
                 fields["section_name_appender"] = ""
@@ -987,6 +920,119 @@ class Wikia(commands.Cog):
 
         return fields
 
+    def util_size_to_string(self, sz, w, h):
+        """Return a human-readable byte, width, and height size value on the given (bytes, width, height) input."""
+        str_sz = ""
+        if sz:
+            int_sz = sz
+            sz_mags = ["bytes", "KB", "MB", "GB", "TB"]
+            sz_mag = 0
+            sz_fmt = "{:,d}"
+            while True:
+                str_sz = "{} {}".format(sz_fmt, sz_mags[sz_mag]).format(int_sz)
+                if int_sz <= 1024 or sz_mag + 1 >= len(sz_mags):
+                    break
+                int_sz /= 1024
+                sz_mag += 1
+                sz_fmt = "{:,.1f}"
+
+            if w and h:
+                str_sz += " | {}×{}".format(w, h)
+
+        return str_sz
+
+    def util_subdomain_is_valid(self, subdomain : str):
+        """Check if subdomain matches URL domain constraints:
+
+        One or more characters.
+        Must start with [A-Za-z].
+        All other characters must be [A-Za-z0-9-]."""
+        return  len(subdomain) > 0 and \
+                subdomain[0].isalnum() and \
+                ((subdomain[1:].replace("-", "").isalnum() and len(subdomain) > 1) or \
+                len(subdomain) == 1)
+
+    def util_subdomain_to_string(self, subdomain : str):
+        """Get subdomain as URL."""
+        return "<https://{}.fandom.com/>".format(escape(subdomain.lower(), mass_mentions = True))
+
+    def util_color_to_string(self, color : discord.Color):
+        """Get color as #RRGGBB or "None"."""
+        if color:
+            return str(color)
+        else:
+            return "default"
+
+    def util_color_from_string(self, color : str):
+        """Get color value from the given string. Can return None if "none" or "default" or throws ValueError if invalid."""
+        if not color or len(color) == 0 or color.lower() == "none" or color.lower() == "default":
+            return None
+        else:
+            prefix = ""
+            try:
+                if color.startswith("#"):
+                    prefix = "#"
+                    color = color[1:]
+                if color.startswith("0x"):
+                    prefix = "0x"
+                    color = color[2:]
+
+                if len(color) == 6:
+                    # RRGGBB or #RRGGBB or 0xRRGGBB
+                    return discord.Color(value=int(color, 16))
+                elif prefix == "#" and len(color) == 3:
+                    # #RGB -> RRGGBB
+                    color = color[0] + color[0] + color[1] + color[1] + color[2] + color[2]
+                    return discord.Color(value=int(color, 16))
+                elif prefix != "#" and len(color) <= 6 and len(color) > 0:
+                    # 0xRRGGBB or RRGGBB
+                    return discord.Color(value=int(color, 16))
+                else:
+                    # #X with length != 6 and != 3
+                    raise ValueError("Invalid RRGGBB format.")
+            except ValueError:
+                # check if hex parse failed because it was a named color
+                defcolors = [func for func in dir(discord.Color) \
+                        if callable(getattr(discord.Color, func)) and \
+                        not func.startswith("_") and \
+                        not func.startswith("from_") and \
+                        not func.startswith("to_")]
+                for defcolor in defcolors:
+                    if color.lower() == defcolor.lower():
+                        return getattr(discord.Color, defcolor)()
+                # wasn't a named color, re-raise
+                raise
+
+
+    def util_string_cut(self, content, length, word_cut = 100):
+        """Cuts off text after a given length, preferring a certain "word length"."""
+        # loop after possible modification
+        #input_content_length = str(len(content))
+        content = content.strip()
+        cut_point = 0
+        prev_cut_point = 0
+        pos = 0
+        for char in content:
+            # set "cut" points
+            if char == " " or char == "\n" or char == "\t" or char == "-" or char == "]":
+                cut_point = pos
+
+            pos += 1
+
+            # cut here; no more looping
+            if pos > length:
+                if prev_cut_point - 3 < length and prev_cut_point + word_cut - 3 >= length:
+                    # last word is too long, cut abruptly and append "..."
+                    content = content[:length - 3] + "..."
+                else:
+                    # last word is acceptable
+                    content = content[:prev_cut_point + 1] + "..."
+                break
+            else:
+                prev_cut_point = cut_point
+        #print("length: {} cut_at: {} wcut: {} rescut: {}".format(input_content_length, length, word_cut, str(len(content))))
+        return content
+
     @commands.group(aliases=["wikiaset"])
     @checks.mod_or_permissions(manage_guild=True)
     async def fandomset(self, ctx):
@@ -995,16 +1041,54 @@ class Wikia(commands.Cog):
 
     @fandomset.command(name="default", aliases=["defaultwiki", "defaultfandom", "defaultwikia"])
     @checks.mod_or_permissions(manage_guild=True)
-    async def fandomset_default(self, ctx, subdomain):
+    async def fandomset_default(self, ctx, subdomain = None):
         """Set the default wiki for this server."""
         if ctx.guild is None:
             await ctx.send(error("You cannot set a default wiki in private messages with me. Use the `fandomset default` command in a server."))
             return
 
-        if self.is_valid_subdomain(subdomain):
-            await self.config.guild(ctx.guild).default_wikia.set(subdomain.lower())
-            await ctx.send(info("The default wiki for this server is now: <http://{}.fandom.com>".format(escape(subdomain.lower(), mass_mentions = True))))
+        if subdomain:
+            if self.util_subdomain_is_valid(subdomain):
+                subdomain_s = self.util_subdomain_to_string(subdomain)
+                await self.config.guild(ctx.guild).default_wikia.set(subdomain.lower())
+                await ctx.send(info("The default wiki for this server is now: {}".format(subdomain_s)))
+            else:
+                await ctx.send(error("That subdomain is not valid."))
+        else:
+            subdomain = await self.config.guild(ctx.guild).default_wikia()
+            subdomain_s = self.util_subdomain_to_string(subdomain)
+            await ctx.send(info("The default wiki for this server is currently: {}".format(subdomain_s)))
+
+    @fandomset.command(name="accentcolor", aliases=["accent", "accentcolour", "color", "colour"])
+    @checks.mod_or_permissions(manage_guild=True)
+    async def fandomset_accentcolor(self, ctx, subdomain, color = None):
+        """Set the accent color to use with each subdomain."""
+        if ctx.guild is None:
+            await ctx.send(error("You cannot set an accent color in private messages with me. Use the `fandomset accentcolor` command in a server."))
+            return
+
+        if self.util_subdomain_is_valid(subdomain):
+            subdomain_s = self.util_subdomain_to_string(subdomain)
+            if color:
+                try:
+                    color_o = self.util_color_from_string(color)
+                    color_s = self.util_color_to_string(color_o)
+                    async with self.config.guild(ctx.guild).accent_color_map() as colors:
+                        if color_o:
+                            colors[subdomain] = color_o.value
+                        elif subdomain in colors:
+                            del colors[subdomain]
+                    await ctx.send(info("The accent color for {} results for this server is now: {}".format(subdomain_s, color_s)))
+                except ValueError:
+                    await ctx.send(error("That color is not valid."))
+            else:
+                color_o = None
+                async with self.config.guild(ctx.guild).accent_color_map() as colors:
+                    if subdomain in colors:
+                        color_o = discord.Color(colors[subdomain])
+                if color_o:
+                    color_s = self.color_to_string(color_o)
+                    await ctx.send(info("The accent color for {} results for this server is currently: {}".format(subdomain_s, color_s)))
         else:
             await ctx.send(error("That subdomain is not valid."))
-
 

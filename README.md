@@ -18,8 +18,9 @@ Useful utilities I created for the Falcom discord, but anyone can use these ones
     - `[p]mix <item> <item> ...`
 
 - FANDOM Wiki (`wikia`): A command to retrieve detailed, formatted preview content from a FANDOM Wiki page.
-    - `[p]wiki -w <subdomain> <page name>`: Lookup page. "`-w <subdomain>`" part is optional if a default is set for a server.
-    - [mod] `[p]wikiset default <subdomain>`
+    - `[p]fandom -w <subdomain> <page name>`: Lookup page. "`-w <subdomain>`" part is optional if a default is set for a server.
+    - [mod] `[p]fandomset default <subdomain>`: Sets the default subdomain when "`-w <subdomain>`" is not specified for a server.
+    - [mod] `[p]fandomset accentcolor <subdomain> <color>`: Sets the accent color of the subdomain specified for a server.
 
 - Role Requests (`rolereqs`): A system for displaying and allowing users to request moderator-whitelisted list of roles.
     - `[p]req <role_name>`/`[p]req add <role_name>`: Request a role.
