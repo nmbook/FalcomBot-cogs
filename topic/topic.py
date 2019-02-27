@@ -28,8 +28,10 @@ class Topic(commands.Cog):
                 await ctx.send(content=info("No topic is set for {channel_mention} on {guild}.".format(channel_mention = channel.mention, guild = escape(channel.guild, mass_mentions = True))))
                 return
 
-            embed = discord.Embed(description=channel.topic.replace("](", "]\\("))
-            embed.set_footer(text="#{channel} on {guild}".format(channel = channel, guild = channel.guild))
+            embed = discord.Embed(title="#{channel}".format(channel = channel),
+                    url="https://discordapp.com/channels/{guild_id}/{channel_id}/".format(guild_id = channel.guild.id, channel_id = channel.id),
+                    description=channel.topic.replace("](", "]\\("))
+            embed.set_footer(text=channel.guild)
             try:
                 await ctx.send(embed=embed)
             except (discord.Forbidden, discord.HTTPException):
