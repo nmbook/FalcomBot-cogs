@@ -1,8 +1,9 @@
 {
     "author" : ["Ribose#1243"],
     "name" : "Falcogs",
-    "short" : "Utilities for Falcom discord.",
-    "description" : "Useful utilities I created for the Falcom discord, but anyone can use these ones here that are complete and functioning!",
+    "short" : "General utilities for Falcom discord",
+    "description" : "Useful utilities I created for the Falcom discord, generalized for any Red V3 bots.",
     "tags" : ["ribose"],
-    "install_msg": "Thank you for installing! These are useful utilities I made, and I hope there's something for you, too. Submit issues to <https://github.com/nmbook/FalcomBot-cogs/issues> or message me privately on discord at **Ribose#1243**."
+    "install_msg": "Thank you for installing! These are useful utilities I made, and I hope there's something for you, too. Submit issues to <https://github.com/nmbook/FalcomBot-cogs/issues>, message me privately on discord at **Ribose#1243**, or ping me on the Red Cog Support server <https://discord.gg/GET4DVk>."
 }
+
