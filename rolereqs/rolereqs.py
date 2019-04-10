@@ -57,12 +57,15 @@ class RoleRequests(commands.Cog):
         post_id = await self.config.channel(channel).role_info_post()
         result = await self._post_list(channel, post_id, msg)
 
+        upd_resp = "Manually update it later with `{p}request postlist #{channel}`."
         if result is None:
-            await ctx.send("No update needed. Update it later with `{}request postlist #{}`".format(ctx.prefix[0], channel))
+            resp = "No update needed."
         elif result:
-            await ctx.send("Message updated. Update it later with `{}request postlist #{}`".format(ctx.prefix[0], channel))
+            resp = "Message updated."
         else:
-            await ctx.send("Message posted to channel. Update it later with `{}request postlist #{}`".format(ctx.prefix[0], channel))
+            resp = "Message posted."
+
+        await ctx.send(info("{} {}".format(resp, upd_resp).format(p=ctx.prefix, channel=channel)))
 
     @request.command()
     @commands.guild_only()
@@ -78,11 +81,11 @@ class RoleRequests(commands.Cog):
             return
 
         if role_to_add in ctx.author.roles:
-            await ctx.send(error("You already have the role `{}`.".format(role_to_add)))
+            await ctx.send(error("You already have the role `{role}`.".format(role=role_to_add)))
             return
 
         if not role_to_add.id in role_subset:
-            await ctx.send(error("You cannot request `{}`.".format(role_to_add)))
+            await ctx.send(error("You cannot request `{role}`.".format(role=role_to_add)))
             return
 
         count = 0
@@ -93,11 +96,12 @@ class RoleRequests(commands.Cog):
                     cpl = ""
                     if count != 1:
                         cpl = "s"
-                    await ctx.send(error("You already have {} role{} that can be requested (max: {}). You may ask a moderator or you may remove a role with with `{}request rem NAME`.".format(count, cpl, max_requestable, ctx.prefix[0])))
+                    await ctx.send(error("You already have {user_num_roles} roles that can be requested. You may ask a moderator or you may remove a role with with `{p}request rem NAME`."
+                        .format(user_num_roles=count, max_num_roles=max_requestable, p=ctx.prefix)))
                     return
 
         await ctx.author.add_roles(role_to_add)
-        await ctx.send("Added {} to your roles.".format(await self._get_role_styled(ctx, role_to_add)))
+        await ctx.send("Added {r} to your roles.".format(r=await self._get_role_styled(ctx, role_to_add)))
         if await self.config.guild(ctx.guild).auto_post_list():
             await self._auto_post_list(ctx)
 
@@ -116,15 +120,15 @@ class RoleRequests(commands.Cog):
             return
 
         if not role_to_add in ctx.author.roles:
-            await ctx.send(error("You do not have the role `{}`.".format(role_to_add)))
+            await ctx.send(error("You do not have the role `{role}`.".format(role=role_to_add)))
             return
 
         if not role_to_add.id in role_subset:
-            await ctx.send(error("You cannot remove `{}`.".format(role_to_add)))
+            await ctx.send(error("You cannot remove `{role}`.".format(role=role_to_add)))
             return
 
         await ctx.author.remove_roles(role_to_add)
-        await ctx.send("Removed {} from your roles.".format(await self._get_role_styled(ctx, role_to_add)))
+        await ctx.send("Removed {r} from your roles.".format(r=await self._get_role_styled(ctx, role_to_add)))
         if await self.config.guild(ctx.guild).auto_post_list():
             await self._auto_post_list(ctx)
 
@@ -139,9 +143,9 @@ class RoleRequests(commands.Cog):
         if role_count > 0:
             await ctx.author.remove_roles(*role_objs)
             if role_count > 1:
-                await ctx.send("Removed {} of your roles.".format(role_count))
+                await ctx.send("Removed {num} of your roles.".format(num=role_count))
             else:
-                await ctx.send("Removed {} from your roles.".format(await self._get_role_styled(ctx, role_objs[0])))
+                await ctx.send("Removed {r} from your roles.".format(r=await self._get_role_styled(ctx, role_objs[0])))
             if await self.config.guild(ctx.guild).auto_post_list():
                 await self._auto_post_list(ctx)
         else:
@@ -159,11 +163,11 @@ class RoleRequests(commands.Cog):
 
         async with self.config.guild(ctx.guild).roles() as role_subset:
             if ctx.guild.id in role_subset:
-                await ctx.send(error("Role {} can already be requested.".format(await self._get_role_styled(ctx, role_to_add))))
+                await ctx.send(error("Role {r} can already be requested.".format(r=await self._get_role_styled(ctx, role_to_add))))
                 return
 
             role_subset.append(role_to_add.id)
-            await ctx.send(info("Added {} to requestable roles list.".format(await self._get_role_styled(ctx, role_to_add))))
+            await ctx.send(info("Added {r} to requestable roles list.".format(r=await self._get_role_styled(ctx, role_to_add))))
             if await self.config.guild(ctx.guild).auto_post_list():
                 await self._auto_post_list(ctx)
 
@@ -179,11 +183,11 @@ class RoleRequests(commands.Cog):
         
         async with self.config.guild(ctx.guild).roles() as role_subset:
             if not ctx.guild.id in role_subset:
-                await ctx.send(error("Role {} was already not requestable.".format(await self._get_role_styled(ctx, role_to_add))))
+                await ctx.send(error("Role {r} was already not requestable.".format(r=await self._get_role_styled(ctx, role_to_add))))
                 return
 
             role_subset.remove(role_to_add.id)
-            await ctx.send(info("Removed {} from requestable roles list.".format(await self._get_role_styled(ctx, role_to_add))))
+            await ctx.send(info("Removed {r} from requestable roles list.".format(r=await self._get_role_styled(ctx, role_to_add))))
             if await self.config.guild(ctx.guild).auto_post_list():
                 await self._auto_post_list(ctx)
 
@@ -223,26 +227,26 @@ class RoleRequests(commands.Cog):
                 n += 1
 
             if len(accounts) == 0:
-                await ctx.send(error("No users have participated in the last {} messages in {}.".format(n, channel.mention)))
+                await ctx.send(error("No users have participated in the last {num} messages in {channel}.".format(num=n, channel=channel.mention)))
             elif len(accounts) == 1:
                 await accounts[0].add_roles(role_to_add)
-                await ctx.send(info("Added {} to {}'s roles (only participant in the last {} messages in {}).".format(
-                        await self._get_role_styled(ctx, role_to_add),
-                        accounts[0], n, channel.mention)))
+                await ctx.send(info("Added {r} to {member}'s roles (only participant in the last {num} messages in {channel}).".format(
+                        r=await self._get_role_styled(ctx, role_to_add),
+                        member=accounts[0], num=n, channel=channel.mention)))
                 if await self.config.guild(ctx.guild).auto_post_list():
                     await self._auto_post_list(ctx)
             else:
                 for account in accounts:
                     await account.add_roles(role_to_add)
-                await ctx.send(info("Added {} to {} users' roles (participants in the last {} messages in {}).".format(
-                        await self._get_role_styled(ctx, role_to_add),
-                        len(accounts), n, channel.mention)))
+                await ctx.send(info("Added {r} to {num_members} users' roles (participants in the last {num} messages in {channel}).".format(
+                        r=await self._get_role_styled(ctx, role_to_add),
+                        num_members=len(accounts), num=n, channel=channel.mention)))
                 if await self.config.guild(ctx.guild).auto_post_list():
                     await self._auto_post_list(ctx)
 
     async def _get_role_styled(self, ctx, role_obj):
         if role_obj.mentionable:
-            role_txt = "@{} [pingable]".format(escape(str(role_obj), mass_mentions = True))
+            role_txt = "@{} [pingable]".format(escape(str(role_obj), mass_mentions=True))
         else:
             role_txt = role_obj.mention
 
@@ -282,9 +286,9 @@ class RoleRequests(commands.Cog):
                     break
         
         if n == 0:
-            return "There are no roles set up on this server.\n\nAdd them with `{}request addrole NAME`".format(ctx.prefix[0])
+            return "There are no roles set up on this server.\n\nAdd them with `{p}request addrole NAME`".format(p=ctx.prefix)
         else:
-            return "__***REQUESTABLE ROLES ON THIS SERVER***__ ({number} roles){roles}\n\nModify your roles{in_chan} with:\n`{prefix}request add NAME`\n`{prefix}request rem NAME`".format(number=n, roles=msg, prefix=ctx.prefix[0], in_chan=in_chan)
+            return "__***REQUESTABLE ROLES ON THIS SERVER***__ ({number} roles){roles}\n\nModify your roles{in_chan} with:\n`{p}request add NAME`\n`{p}request rem NAME`".format(number=n, roles=msg, p=ctx.prefix, in_chan=in_chan)
 
     async def _find_role(self, ctx, role_name, *, role_subset=None):
         """Finds a role by text name using loose matching. Strips "@" symbols, ignores case, and accepts role pings and partial text matches."""
@@ -297,7 +301,7 @@ class RoleRequests(commands.Cog):
         if len(ctx.message.role_mentions) > 0:
             role_to_add = ctx.message.role_mentions[0]
 
-        # check if on this guilda
+        # check if on this guild
         found_on_guild = False
         if not role_to_add is None:
             for role_obj in ctx.guild.roles:
@@ -397,9 +401,9 @@ class RoleRequests(commands.Cog):
         if await self.config.guild(ctx.guild).auto_post_list():
             await self._auto_post_list(ctx)
         if channel_id != 0:
-            await ctx.send(info("The `[p]request list` response now suggests using the `[p]request` commands in {}.".format(channel.mention)))
+            await ctx.send(info("The `{p}request list` response now suggests using the `{p}request` commands in {channel}.".format(p=ctx.prefix, channel=channel.mention)))
         else:
-            await ctx.send(info("The `[p]request list` response no longer suggests a channel to use `[p]request` commands in."))
+            await ctx.send(info("The `{p}request list` response no longer suggests a channel to use `{p}request` commands in.".format(p=ctx.prefix)))
 
     @reqset.command(aliases=["max_req", "max"])
     @commands.guild_only()
