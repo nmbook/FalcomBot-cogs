@@ -31,8 +31,11 @@ class Wikia(commands.Cog):
         self.config.register_guild(**default_guild)
         self.http_client = aiohttp.ClientSession()
 
-    def __unload(self):
+    def cog_unload(self):
         self.bot.loop.create_task(self.http_client.close())
+
+    __delete__ = cog_unload
+    __unload = cog_unload
 
     @commands.command(aliases=["wikia"])
     async def fandom(self, ctx, *, search_terms : str):
