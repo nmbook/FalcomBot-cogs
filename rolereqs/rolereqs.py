@@ -345,7 +345,7 @@ class RoleRequests(commands.Cog):
         updated = False
         if post_id > 0:
             try:
-                post = await channel.get_message(post_id)
+                post = await channel.fetch_message(post_id)
                 updated = True
                 if msg != post.content:
                     await post.edit(content=msg)

@@ -23,7 +23,7 @@ class Rot13(commands.Cog):
 
         #self.embed_cache = []
 
-    async def on_message(self, message):
+    async def on_message_without_command(self, message):
         """Handle on_message: Add auto-reaction if settings permit."""
         if not isinstance(message.channel, discord.TextChannel):
             # this is a DM or group DM, discard early
@@ -44,11 +44,6 @@ class Rot13(commands.Cog):
         if len(message.clean_content) == 0:
             # nothing to do, exit early
             return
-        else:
-            for prefix in await self.bot.get_prefix(message):
-                if message.clean_content.startswith(prefix):
-                    # starts with prefix, ignore command here
-                    return
 
         settings = await self.config.guild(message.guild).all()
         if settings["on_react_decode_dm"] and len(settings["auto_react_to"]) > 0:
@@ -72,7 +67,7 @@ class Rot13(commands.Cog):
             # channel could not be found, inaccessible, or is gone
             return
         try:
-            message = await channel.get_message(payload.message_id)
+            message = await channel.fetch_message(payload.message_id)
         except (discord.NotFound, discord.Forbidden, discord.HTTPException):
             # message could not be found, inaccessible, or is gone
             return
