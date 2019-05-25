@@ -24,6 +24,7 @@ class Wikia(commands.Cog):
         default_guild = {
                 "default_wikia": "",
                 "accent_color_map": {},
+                "tag_as_spoilers": False,
         }
 
         self.bot = bot
@@ -86,10 +87,10 @@ class Wikia(commands.Cog):
                     del fields["cat_members"]
                     del fields["cat_subcats"]
 
-            embed = await self.mw_embed_output(ctx, **fields)
+            content, embed = await self.mw_embed_output(ctx, **fields)
 
             try:
-                await ctx.send(embed=embed)
+                await ctx.send(content=content, embed=embed)
             except Exception as ex:
                 print("Exception on sending discord.Embed:\n{}\n".format(traceback.format_exc()))
                 await ctx.send(escape("*Error: An error occurred sending the discord.Embed:* `{}`\nFalling back to legacy output.\n\n**__{}__{}** (<{}{}>):\n\n{}".format(
@@ -380,12 +381,19 @@ class Wikia(commands.Cog):
             title=title,
             url=kwargs["page_url"] + kwargs["section_url"],
             description=description)
+
         color_o = None
         async with self.config.guild(ctx.guild).accent_color_map() as colors:
             if subdomain in colors:
                 color_o = discord.Color(value=colors[subdomain])
         if color_o:
             data.color = color_o
+
+        data.set_author(name="{} Wiki".format(kwargs["subdomain"].title()), url="{}Main_Page".format(kwargs["base_url"]))
+
+        content = ""
+        if not state.startswith("error") and await self.config.guild(ctx.guild).tag_as_spoilers():
+            content = "**{wiki_name} result** (URL: ||{url}||)".format(wiki_name=data.author.name, title=data.title, url=data.url)
 
         # category results
         if "cat_subcats" in kwargs:
@@ -494,7 +502,6 @@ class Wikia(commands.Cog):
         elif "first_image" in kwargs and not kwargs["first_image"] is None:
             data.add_field(name=self.util_string_cut("{}".format(kwargs["first_image"][0].replace("_", " ")), 256, 10), value="*No caption provided.*")
 
-        data.set_author(name="{} Wiki".format(kwargs["subdomain"].title()), url="{}Main_Page".format(kwargs["base_url"]))
         #data.set_footer(text="Requested by {}".format(ctx.message.author))
         #data.timestamp = datetime.datetime.utcnow()
         if footer_edit_text:
@@ -502,7 +509,8 @@ class Wikia(commands.Cog):
         if footer_edit_time:
             data.timestamp = footer_edit_time
         #print(data.to_dict())
-        return data
+
+        return content, data
     
     def mw_normalize_section(self, sect):
         """Normalizes a section name."""
@@ -1097,4 +1105,21 @@ class Wikia(commands.Cog):
                     await ctx.send(info("The accent color for {} results for this server is currently: {}".format(subdomain_s, color_s)))
         else:
             await ctx.send(error("That subdomain is not valid."))
+
+    @fandomset.command(name="tag", aliases=["tagspoilers", "tagspoiler", "spoilers", "spoiler"])
+    @checks.mod_or_permissions(manage_guild=True)
+    async def fandomset_tag(self, ctx, value : bool = None):
+        """Sets whether to tag wiki results as spoilers on this server."""
+        if ctx.guild is None:
+            await ctx.send(error("You cannot set whether to tag in private messages with me. Use the `fandomset tag` command in a server."))
+            return
+
+        if value is None:
+            value = not await self.config.guild(ctx.guild).tag_as_spoilers()
+
+        await self.config.guild(ctx.guild).tag_as_spoilers.set(value)
+        if value:
+            await ctx.send(info("I will tag all wiki results as spoilers."))
+        else:
+            await ctx.send(info("I will not tag wiki results as spoilers."))
 
