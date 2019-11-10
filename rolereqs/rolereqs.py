@@ -162,7 +162,7 @@ class RoleRequests(commands.Cog):
             return
 
         async with self.config.guild(ctx.guild).roles() as role_subset:
-            if ctx.guild.id in role_subset:
+            if role_to_add.id in role_subset:
                 await ctx.send(error("Role {r} can already be requested.".format(r=await self._get_role_styled(ctx, role_to_add))))
                 return
 
@@ -182,11 +182,12 @@ class RoleRequests(commands.Cog):
             return
         
         async with self.config.guild(ctx.guild).roles() as role_subset:
-            if not ctx.guild.id in role_subset:
+            if not role_to_add.id in role_subset:
                 await ctx.send(error("Role {r} was already not requestable.".format(r=await self._get_role_styled(ctx, role_to_add))))
                 return
 
-            role_subset.remove(role_to_add.id)
+            while role_to_add.id in role_subset:
+                role_subset.remove(role_to_add.id)
             await ctx.send(info("Removed {r} from requestable roles list.".format(r=await self._get_role_styled(ctx, role_to_add))))
             if await self.config.guild(ctx.guild).auto_post_list():
                 await self._auto_post_list(ctx)
