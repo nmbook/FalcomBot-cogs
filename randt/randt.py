@@ -158,8 +158,12 @@ class RandomizationTools(commands.Cog):
         if len(dice) < 100:
             d_ind = "\r\nValues: {}".format(", ".join(["`{}`".format(x) for x in d_rol]))
 
-        await ctx.send(info("Collected and rolled {:,} dice!{}\r\nTotal number of sides: {:,}\r\n**Total value: {:,}**".format( \
-                len(dice), d_ind, sum(dice), sum(d_rol))))
+        await ctx.send(info("Collected and rolled {die_count:,} dice!{values}\r\nTotal number of sides: {side_count:,}\r\n**Total value: {total_sum:,}  Average value: {total_avg:,.2f}**".format( \
+                die_count=len(dice),
+                values=d_ind,
+                side_count=sum(dice),
+                total_sum=sum(d_rol),
+                total_avg=sum(d_rol)/len(dice))))
 
 
     async def _roll1(self, ctx, r_min, r_max):
