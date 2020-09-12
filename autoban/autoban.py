@@ -100,7 +100,7 @@ class AutoBan(commands.Cog):
     @autoban.command()
     @commands.guild_only()
     @checks.mod_or_permissions(manage_guild=True)
-    async def list(self, ctx, *):
+    async def list(self, ctx):
         """List terms from the auto-ban list."""
         async with self.config.guild(ctx.guild).terms() as terms:
             if len(terms) == 0:
@@ -112,7 +112,7 @@ class AutoBan(commands.Cog):
     @autoban.command()
     @commands.guild_only()
     @checks.mod_or_permissions(manage_guild=True)
-    async def clear(self, ctx, *, term):
+    async def clear(self, ctx):
         """Clear terms from the auto-ban list."""
         await self.config.guild(ctx.guild).terms.set([])
         await ctx.send(info("Terms cleared on this server."))
