@@ -1,0 +1,9 @@
+{
+    "name": "Auto-Ban",
+    "author": ["Ribose"],
+    "description": "Configurable list of spam words to zap. Users with any roles are ignored.",
+    "short": "Configurable list of spam words to zap.",
+    "tags": ["spam", "passive", "ban", "autoban", "utilities"],
+    "install_msg": "Thank you for installing the auto-ban cog. Add items for each server with `[p]autoban term` and remove with `[p]autoban remove term`"
+}
+
