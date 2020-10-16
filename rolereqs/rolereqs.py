@@ -101,7 +101,11 @@ class RoleRequests(commands.Cog):
                         .format(user_num_roles=count, max_num_roles=max_requestable, p=ctx.prefix)))
                     return
 
-        await ctx.author.add_roles(role_to_add)
+        try:
+            await ctx.author.add_roles(role_to_add)
+        except discod.Forbidden:
+            await self._raw_send_no_mention(ctx, error("This bot doesn't have permission to add that role."))
+            return
         await self._raw_send_no_mention(ctx, "Added {r} to your roles.".format(r=await self._get_role_styled(ctx, role_to_add)))
         if await self.config.guild(ctx.guild).auto_post_list():
             await self._auto_post_list(ctx)
@@ -128,7 +132,11 @@ class RoleRequests(commands.Cog):
             await self._raw_send_no_mention(ctx, error("You cannot remove `{role}`.".format(role=role_to_add)))
             return
 
-        await ctx.author.remove_roles(role_to_add)
+        try:
+            await ctx.author.remove_roles(role_to_add)
+        except discod.Forbidden:
+            await self._raw_send_no_mention(ctx, error("This bot doesn't have permission to remove that role."))
+            return
         await self._raw_send_no_mention(ctx, "Removed {r} from your roles.".format(r=await self._get_role_styled(ctx, role_to_add)))
         if await self.config.guild(ctx.guild).auto_post_list():
             await self._auto_post_list(ctx)
@@ -142,7 +150,11 @@ class RoleRequests(commands.Cog):
         role_objs = [x for x in ctx.author.roles if x.id in role_subset]
         role_count = len(role_objs)
         if role_count > 0:
-            await ctx.author.remove_roles(*role_objs)
+            try:
+                await ctx.author.remove_roles(*role_objs)
+            except discod.Forbidden:
+                await self._raw_send_no_mention(ctx, error("This bot doesn't have permission to remove those roles."))
+                return
             if role_count > 1:
                 await self._raw_send_no_mention(ctx, "Removed {num} of your roles.".format(num=role_count))
             else:
