@@ -15,7 +15,7 @@ class RoleRequests(commands.Cog):
                 "max_requestable": 3,
                 "request_channel": 0,
                 "auto_post_list": True,
-                "show_member_count": True,
+                "show_member_count": False,
         }
 
         default_channel = {
