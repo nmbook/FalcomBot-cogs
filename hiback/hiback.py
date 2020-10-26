@@ -8,6 +8,8 @@ class HiBack(commands.Cog):
         """Initialize Hi, Back cog."""
         self.bot = bot
 
+    @commands.Cog.listener()
+    @commands.guild_only()
     async def on_message_without_command(self, message):
         """Handle on_message."""
         if not isinstance(message.channel, discord.TextChannel):
