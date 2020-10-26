@@ -38,7 +38,7 @@ class HiBack(commands.Cog):
                 if back.endswith('.'):
                     back = back[:-1]
                 back += '!'
-                await ctx.send("Hi, {back}".format(back=back),
+                await message.channel.send("Hi, {back}".format(back=back),
                                allowed_mentions=discord.AllowedMentions(
                                everyone=False, roles=False, users=False))
             except (discord.HTTPException, discord.Forbidden, ):
