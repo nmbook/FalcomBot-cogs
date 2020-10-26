@@ -32,7 +32,8 @@ class HiBack(commands.Cog):
         if len(content) == 0:
             # nothing to do, exit early
             return
-        if content.lower().startswith("i'm "):
+        if content.lower().startswith("i'm ") and not (':' in content) and \
+                        len(content) < 50:
             try:
                 back = content[4:5].upper() + content[5:]
                 if back.endswith('.'):
