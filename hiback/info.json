@@ -1,0 +1,9 @@
+{
+    "name": "Hi, Back",
+    "author": ["Ribose"],
+    "description": "Responds to \"I'm X\" with \"Hi, X\".",
+    "short": "Responds to \"I'm X\" with \"Hi, X\".",
+    "tags": ["dadjokes", "jokes"],
+    "install_msg": "Thank you for installing \"Hi, Back\". This cog has no configuration. Enable or disable it for your servers' amusement."
+}
+
