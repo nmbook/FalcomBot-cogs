@@ -45,25 +45,27 @@ class AutoBan(commands.Cog):
 
         terms = await self.config.guild(message.guild).terms()
         counter = 0
+        content = message.content
         term = ''
+        last_term = None
         for term in terms:
-            content = message.content
-            if term.lower() in content.lower():
-                counter += 1
-            if term.lower() in author.name.lower():
-                counter += 1
-            if term.lower() in author.display_name.lower():
-                counter += 1
+            if len(term) > 0:
+                if len(content) > 0 and term.lower() in content.lower():
+                    counter += 1
+                    last_term = term
+                if len(author.name) > 0 and term.lower() in author.name.lower():
+                    counter += 1
+                    last_term = term
 
-        if counter >= 1:
+        if counter >= 1 and len(terms) > 0 and len(term) > 0:
             #print("caught word " + term.lower() + " from " + str(message.author) + " with " + str(len(author.roles)))
             await message.delete(delay=0)
             s = "Autoban: {q}{term}{q}\nUsername: {name} - Text: {text}"
             reason = s.format(
-                    term=term,
+                    term=last_term,
                     q='"',
                     name=author.name,
-                    text=content[:512-len(term)-len(author.name)-len(s)])
+                    text=content[:512-len(last_term)-len(author.name)-len(s)])
             await author.ban(reason=reason[:512], delete_message_days=0)
 
     @commands.group(invoke_without_command=True)
