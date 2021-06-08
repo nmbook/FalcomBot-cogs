@@ -1,8 +1,10 @@
 # Auto-Ban module
 # Ribose
 
+from datetime import timezone
+
 import discord
-from redbot.core import commands, Config, checks
+from redbot.core import commands, Config, checks, modlog
 from redbot.core.utils.chat_formatting import escape, info, error, humanize_list
 
 class AutoBan(commands.Cog):
@@ -59,14 +61,36 @@ class AutoBan(commands.Cog):
 
         if counter >= 1 and len(terms) > 0 and len(term) > 0:
             #print("caught word " + term.lower() + " from " + str(message.author) + " with " + str(len(author.roles)))
-            await message.delete(delay=0)
             s = "Autoban: {q}{term}{q}\nUsername: {name} - Text: {text}"
             reason = s.format(
                     term=last_term,
                     q='"',
                     name=author.name,
                     text=content[:512-len(last_term)-len(author.name)-len(s)])
-            await author.ban(reason=reason[:512], delete_message_days=0)
+            try:
+                await message.delete(delay=0)
+            except:
+                pass
+            try:
+                await author.ban(reason=reason[:512], delete_message_days=0)
+            except discord.HTTPException:
+                log.warning(
+                    "Failed to ban a member ({member}) for mention spam in server {guild}.".format(
+                        member=author.id, guild=message.guild.id
+                    )
+                )
+            else:
+                await modlog.create_case(
+                    self.bot,
+                    guild,
+                    message.created_at.replace(tzinfo=timezone.utc),
+                    "ban",
+                    author,
+                    guild.me,
+                    reason,
+                    until=None,
+                    channel=message.channel,
+                )
 
     @commands.group(invoke_without_command=True)
     @commands.guild_only()
