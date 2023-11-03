@@ -1,5 +1,5 @@
 from .wikia import Wikia
 
-def setup(bot):
-    bot.add_cog(Wikia(bot))
+async def setup(bot):
+    await bot.add_cog(Wikia(bot))
 

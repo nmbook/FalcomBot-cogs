@@ -1,5 +1,5 @@
 from .textt import TextTools
 
-def setup(bot):
-    bot.add_cog(TextTools(bot))
+async def setup(bot):
+    await bot.add_cog(TextTools(bot))
 
